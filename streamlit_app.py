@@ -145,7 +145,15 @@ class QuestionGenerator:
                 }
         
         elif age_group == "9-11":
-            if "47%" in content:
+            if "Mars" in title:
+                return {
+                    "type": "math",
+                    "question": "If Mars is about 225 million kilometers from Earth, how many millions is that?",
+                    "options": ["200", "225", "250", "300"],
+                    "correct": "225",
+                    "explanation": "Mars is about 225 million kilometers away from Earth!"
+                }
+            elif "47%" in content:
                 return {
                     "type": "math",
                     "question": "If solar panels can convert 47% of sunlight to electricity, how much sunlight is NOT converted?",
@@ -155,7 +163,15 @@ class QuestionGenerator:
                 }
         
         elif age_group in ["12-14", "15-17"]:
-            if "47%" in content:
+            if "Mars" in title:
+                return {
+                    "type": "math",
+                    "question": "If it takes light 12.5 minutes to travel from Mars to Earth, and light travels at 300,000 km/s, what's the approximate distance?",
+                    "options": ["150 million km", "225 million km", "300 million km", "400 million km"],
+                    "correct": "225 million km",
+                    "explanation": "12.5 minutes × 60 seconds × 300,000 km/s ≈ 225 million km"
+                }
+            elif "47%" in content:
                 return {
                     "type": "math",
                     "question": "If a solar panel receives 1000 watts of sunlight and is 47% efficient, how much electricity does it produce?",
@@ -179,6 +195,14 @@ class QuestionGenerator:
                     "options": ["Rocks", "Water", "Trees", "Animals"],
                     "correct": "Water",
                     "explanation": "Scientists found water under the ground on Mars!"
+                }
+            elif age_group == "9-11":
+                return {
+                    "type": "science",
+                    "question": "What tool did scientists use to find water on Mars?",
+                    "options": ["Telescope", "Radar technology", "Microscope", "Camera"],
+                    "correct": "Radar technology",
+                    "explanation": "Scientists used advanced radar technology on the Mars Reconnaissance Orbiter to find the water!"
                 }
             elif age_group in ["12-14", "15-17"]:
                 return {
