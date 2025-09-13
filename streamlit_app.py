@@ -161,10 +161,10 @@ def get_fallback_articles() -> List[Dict]:
     ]
 
 class QuestionGenerator:
-    """Generates STEM questions based on articles and age groups"""
+    """Generates STEM + ELA questions based on articles and age groups"""
     
     def generate_questions(self, article: Dict, age_group: str) -> List[Dict]:
-        """Generate age-appropriate STEM questions"""
+        """Generate age-appropriate questions for Math, Science, and ELA"""
         questions = []
         
         # Math questions
@@ -176,6 +176,11 @@ class QuestionGenerator:
         science_q = self._generate_science_question(article, age_group)
         if science_q:
             questions.append(science_q)
+        
+        # ELA (English Language Arts) questions
+        ela_q = self._generate_ela_question(article, age_group)
+        if ela_q:
+            questions.append(ela_q)
         
         return questions
     
@@ -191,7 +196,9 @@ class QuestionGenerator:
                     "question": "If we find 3 new planets and each has 2 moons, how many moons total?",
                     "options": ["4", "5", "6", "7"],
                     "correct": "6",
-                    "explanation": "3 planets × 2 moons = 6 moons total!"
+                    "hint": "Try multiplying: How many planets × How many moons each planet has?",
+                    "explanation": "3 planets × 2 moons = 6 moons total!",
+                    "reasoning": "This is multiplication! When we have groups of the same size, we multiply the number of groups by the size of each group."
                 }
             elif "robot" in title or "ocean" in title:
                 return {
@@ -199,7 +206,9 @@ class QuestionGenerator:
                     "question": "If a robot cleans 5 pieces of trash per hour for 3 hours, how many pieces total?",
                     "options": ["12", "15", "18", "20"],
                     "correct": "15",
-                    "explanation": "5 pieces × 3 hours = 15 pieces!"
+                    "hint": "Think about rate × time. How much per hour × how many hours?",
+                    "explanation": "5 pieces × 3 hours = 15 pieces!",
+                    "reasoning": "This shows rate problems! When something happens at a steady rate, we multiply the rate by the time."
                 }
             else:
                 return {
@@ -207,7 +216,9 @@ class QuestionGenerator:
                     "question": "If we plant 4 trees each day for 2 days, how many trees total?",
                     "options": ["6", "7", "8", "9"],
                     "correct": "8", 
-                    "explanation": "4 trees × 2 days = 8 trees!"
+                    "hint": "How many trees per day × how many days?",
+                    "explanation": "4 trees × 2 days = 8 trees!",
+                    "reasoning": "This is repeated addition! 4 + 4 = 8, or we can multiply 4 × 2 = 8."
                 }
         
         elif age_group == "9-11":
@@ -217,7 +228,9 @@ class QuestionGenerator:
                     "question": "If trees absorb 25% of carbon dioxide, how much is left in the air?",
                     "options": ["70%", "75%", "80%", "85%"],
                     "correct": "75%",
-                    "explanation": "100% - 25% = 75% remains in the air"
+                    "hint": "Start with 100% and subtract what the trees absorb.",
+                    "explanation": "100% - 25% = 75% remains in the air",
+                    "reasoning": "Percentages show parts of a whole. If trees take away 25%, we subtract from the total 100%."
                 }
             else:
                 return {
@@ -225,7 +238,9 @@ class QuestionGenerator:
                     "question": "If a discovery was made 10 years ago and it's 2024, what year was it?",
                     "options": ["2012", "2013", "2014", "2015"],
                     "correct": "2014",
-                    "explanation": "2024 - 10 = 2014"
+                    "hint": "Count backwards from 2024. What is 2024 minus 10?",
+                    "explanation": "2024 - 10 = 2014",
+                    "reasoning": "To find a past year, we subtract the number of years ago from the current year."
                 }
         
         elif age_group in ["12-14", "15-17"]:
@@ -235,7 +250,9 @@ class QuestionGenerator:
                     "question": "If a planet is 100 light-years away and light travels 300,000 km/s, how long to reach it?",
                     "options": ["50 years", "100 years", "200 years", "300 years"],
                     "correct": "100 years",
-                    "explanation": "At light speed, it takes 100 years to travel 100 light-years!"
+                    "hint": "A light-year is the distance light travels in one year. How long for 100 light-years?",
+                    "explanation": "At light speed, it takes 100 years to travel 100 light-years!",
+                    "reasoning": "A light-year is a unit of distance, not time. It's the distance light travels in one year, so 100 light-years takes 100 years at light speed."
                 }
             else:
                 return {
@@ -243,7 +260,9 @@ class QuestionGenerator:
                     "question": "If ocean cleanup removes 1,000 kg of plastic daily, how much in a year?",
                     "options": ["300,000 kg", "365,000 kg", "400,000 kg", "500,000 kg"],
                     "correct": "365,000 kg",
-                    "explanation": "1,000 kg × 365 days = 365,000 kg per year"
+                    "hint": "How many days are in a year? Multiply that by the daily amount.",
+                    "explanation": "1,000 kg × 365 days = 365,000 kg per year",
+                    "reasoning": "This is a rate calculation: daily rate × number of days in a year gives the annual total."
                 }
         
         return None
@@ -260,7 +279,9 @@ class QuestionGenerator:
                     "question": "What do scientists use to see far away planets?",
                     "options": ["Microscope", "Telescope", "Camera", "Binoculars"],
                     "correct": "Telescope",
-                    "explanation": "Telescopes help us see things that are very far away in space!"
+                    "hint": "Think about tools that make far away things look bigger and closer.",
+                    "explanation": "Telescopes help us see things that are very far away in space!",
+                    "reasoning": "Telescopes are special tools that collect light and magnify distant objects, making planets and stars visible from Earth."
                 }
             else:
                 return {
@@ -268,7 +289,9 @@ class QuestionGenerator:
                     "question": "Why is finding water on other planets important?",
                     "options": ["It's pretty", "Life needs water", "It's rare", "It's cold"],
                     "correct": "Life needs water",
-                    "explanation": "Water is essential for life as we know it!"
+                    "hint": "Think about what all living things on Earth need to survive.",
+                    "explanation": "Water is essential for life as we know it!",
+                    "reasoning": "All known life forms require water for biological processes like metabolism, so finding water suggests a planet might support life."
                 }
         
         elif "robot" in title or "ocean" in title:
@@ -278,7 +301,9 @@ class QuestionGenerator:
                     "question": "Why is it important to clean the ocean?",
                     "options": ["To look nice", "To help sea animals", "To swim better", "To find treasure"],
                     "correct": "To help sea animals",
-                    "explanation": "Clean oceans help fish, dolphins, and other sea animals stay healthy!"
+                    "hint": "Think about who lives in the ocean and what happens when it's dirty.",
+                    "explanation": "Clean oceans help fish, dolphins, and other sea animals stay healthy!",
+                    "reasoning": "Ocean pollution harms marine ecosystems. Clean water provides oxygen and food that sea creatures need to survive."
                 }
             else:
                 return {
@@ -286,7 +311,9 @@ class QuestionGenerator:
                     "question": "What type of pollution do ocean-cleaning robots target?",
                     "options": ["Oil spills", "Plastic waste", "Chemical waste", "All of these"],
                     "correct": "All of these",
-                    "explanation": "Modern cleanup robots can target various types of ocean pollution!"
+                    "hint": "Think about all the different ways humans pollute the ocean.",
+                    "explanation": "Modern cleanup robots can target various types of ocean pollution!",
+                    "reasoning": "Ocean pollution comes from many sources. Advanced robots use different technologies to detect and remove various pollutants."
                 }
         
         elif "tree" in title or "climate" in title:
@@ -296,7 +323,9 @@ class QuestionGenerator:
                     "question": "What do trees make that we need to breathe?",
                     "options": ["Water", "Oxygen", "Food", "Shelter"],
                     "correct": "Oxygen",
-                    "explanation": "Trees make oxygen that we breathe and take in carbon dioxide!"
+                    "hint": "What invisible gas do your lungs need from the air?",
+                    "explanation": "Trees make oxygen that we breathe and take in carbon dioxide!",
+                    "reasoning": "Trees perform photosynthesis, using sunlight to convert carbon dioxide and water into glucose and oxygen. We need oxygen to live!"
                 }
             else:
                 return {
@@ -304,7 +333,9 @@ class QuestionGenerator:
                     "question": "How do trees help fight climate change?",
                     "options": ["They absorb CO2", "They provide shade", "They prevent erosion", "All of these"],
                     "correct": "All of these",
-                    "explanation": "Trees help climate in multiple ways: absorbing CO2, cooling areas, and preventing soil erosion!"
+                    "hint": "Trees help the environment in many different ways. Think about all their benefits.",
+                    "explanation": "Trees help climate in multiple ways: absorbing CO2, cooling areas, and preventing soil erosion!",
+                    "reasoning": "Trees are climate heroes! They remove CO2 (a greenhouse gas), cool temperatures through shade and transpiration, and their roots prevent soil erosion."
                 }
         
         else:
@@ -313,8 +344,101 @@ class QuestionGenerator:
                 "question": "What is the scientific method?",
                 "options": ["Guessing answers", "Observe, hypothesize, test", "Reading books", "Asking friends"],
                 "correct": "Observe, hypothesize, test",
-                "explanation": "Scientists observe, make hypotheses, and test them to learn new things!"
+                "hint": "Think about the steps scientists follow to discover new things.",
+                "explanation": "Scientists observe, make hypotheses, and test them to learn new things!",
+                "reasoning": "The scientific method is a systematic way to understand the world: observe phenomena, form hypotheses (educated guesses), then test them with experiments."
             }
+    
+    def _generate_ela_question(self, article: Dict, age_group: str) -> Dict:
+        """Generate ELA (English Language Arts) questions based on article content"""
+        title = article["title"].lower()
+        content = article["content"].lower()
+        
+        if age_group == "6-8":
+            if "planet" in title or "space" in title:
+                return {
+                    "type": "ela",
+                    "question": "What is the main idea of this article?",
+                    "options": ["Cooking food", "Finding new planets", "Playing games", "Building houses"],
+                    "correct": "Finding new planets",
+                    "hint": "Look at the title and think about what the whole article is about.",
+                    "explanation": "The article talks about discovering new planets in space!",
+                    "reasoning": "The main idea is the most important thing an article tells us. We find it by looking at what the whole article is about."
+                }
+            elif "robot" in title or "ocean" in title:
+                return {
+                    "type": "ela",
+                    "question": "Which word best describes the robot in the article?",
+                    "options": ["Helpful", "Scary", "Tiny", "Loud"],
+                    "correct": "Helpful",
+                    "hint": "Think about what the robot does for the ocean and sea animals.",
+                    "explanation": "The robot helps by cleaning trash from the ocean!",
+                    "reasoning": "We use describing words (adjectives) to tell what something is like. The robot helps clean, so 'helpful' describes it best."
+                }
+            else:
+                return {
+                    "type": "ela",
+                    "question": "What does the word 'scientists' mean in this article?",
+                    "options": ["People who cook", "People who study things", "People who sing", "People who drive"],
+                    "correct": "People who study things",
+                    "hint": "Think about what scientists do to learn new things.",
+                    "explanation": "Scientists are people who study and learn about the world!",
+                    "reasoning": "Context clues help us understand new words. The article shows scientists discovering and learning things."
+                }
+        
+        elif age_group == "9-11":
+            if "climate" in title or "tree" in title:
+                return {
+                    "type": "ela",
+                    "question": "What is the author's purpose in writing this article?",
+                    "options": ["To entertain", "To inform", "To persuade", "To confuse"],
+                    "correct": "To inform",
+                    "hint": "Think about whether the author is teaching you facts or trying to make you laugh.",
+                    "explanation": "The author wants to teach us facts about trees and climate!",
+                    "reasoning": "Authors write for different purposes: to inform (teach facts), entertain (make us laugh), or persuade (convince us). This article teaches us facts."
+                }
+            else:
+                return {
+                    "type": "ela",
+                    "question": "Which sentence shows cause and effect in the article?",
+                    "options": ["The discovery was amazing", "Scientists used telescopes", "Because of this research, we learned more", "The planet is far away"],
+                    "correct": "Because of this research, we learned more",
+                    "hint": "Look for words like 'because', 'so', or 'as a result' that show one thing causing another.",
+                    "explanation": "This sentence shows that research (cause) led to learning more (effect)!",
+                    "reasoning": "Cause and effect shows how one thing makes another thing happen. Signal words like 'because' help us spot these relationships."
+                }
+        
+        elif age_group in ["12-14", "15-17"]:
+            if "technology" in title or "robot" in title:
+                return {
+                    "type": "ela",
+                    "question": "What literary device does the author use when describing the robot as 'tireless'?",
+                    "options": ["Simile", "Metaphor", "Personification", "Alliteration"],
+                    "correct": "Personification",
+                    "hint": "Think about giving human qualities to non-human things.",
+                    "explanation": "Calling a robot 'tireless' gives it human-like qualities!",
+                    "reasoning": "Personification gives human characteristics to non-human things. Robots don't get tired like humans do, so this is personification."
+                }
+            else:
+                return {
+                    "type": "ela",
+                    "question": "What tone does the author use when discussing this scientific discovery?",
+                    "options": ["Pessimistic", "Optimistic", "Angry", "Bored"],
+                    "correct": "Optimistic",
+                    "hint": "Look at the word choices. Does the author seem excited or worried about the discovery?",
+                    "explanation": "The author uses positive words showing excitement about the discovery!",
+                    "reasoning": "Tone is the author's attitude toward the subject. Positive words like 'exciting', 'breakthrough', and 'promising' show optimism."
+                }
+        
+        return {
+            "type": "ela",
+            "question": "What type of text is this article?",
+            "options": ["Fiction story", "News article", "Poem", "Recipe"],
+            "correct": "News article",
+            "hint": "Think about where you might read this and what kind of information it gives.",
+            "explanation": "This is a news article that tells us about real events!",
+            "reasoning": "News articles inform readers about current events and real happenings in the world, which is what this text does."
+        }
 
 def display_article_with_questions(article: Dict, age_group: str, article_index: int):
     """Display article with generated questions"""
@@ -343,6 +467,11 @@ def display_article_with_questions(article: Dict, age_group: str, article_index:
             
             for j, question in enumerate(questions):
                 question_key = f"q_{article_index}_{j}"
+                attempt_key = f"attempts_{question_key}"
+                
+                # Initialize attempt counter
+                if attempt_key not in st.session_state:
+                    st.session_state[attempt_key] = 0
                 
                 st.write(f"**{question['type'].title()} Question:**")
                 st.write(question["question"])
@@ -358,20 +487,43 @@ def display_article_with_questions(article: Dict, age_group: str, article_index:
                 # Check answer button
                 if st.button(f"Check Answer", key=f"check_{question_key}"):
                     if question_key not in st.session_state.answered_questions:
-                        st.session_state.answered_questions.add(question_key)
+                        st.session_state[attempt_key] += 1
+                        
                         if answer == question["correct"]:
                             st.success(f"🎉 Correct! {question['explanation']}")
+                            st.info(f"💡 **Why this is right:** {question['reasoning']}")
+                            st.session_state.answered_questions.add(question_key)
                             st.session_state.score += 10
                             st.session_state.questions_answered += 1
                             st.balloons()
                         else:
-                            st.error(f"❌ Not quite right. {question['explanation']}")
-                            st.session_state.questions_answered += 1
+                            if st.session_state[attempt_key] == 1:
+                                # First wrong attempt - show hint
+                                st.error(f"❌ Not quite right. Let me give you a hint!")
+                                st.info(f"💡 **Hint:** {question['hint']}")
+                                st.info("Try again! You can do it! 🌟")
+                            else:
+                                # Second attempt - show answer and explanation
+                                st.error(f"❌ That's still not right, but great effort!")
+                                st.success(f"✅ **The correct answer is:** {question['correct']}")
+                                st.info(f"📚 **Explanation:** {question['explanation']}")
+                                st.info(f"💡 **Why this is right:** {question['reasoning']}")
+                                st.session_state.answered_questions.add(question_key)
+                                st.session_state.questions_answered += 1
+                                # Give partial credit for trying
+                                st.session_state.score += 5
                         
                         # Rerun to update sidebar
                         st.rerun()
                     else:
                         st.info("You've already answered this question!")
+                
+                # Show attempt status
+                if st.session_state[attempt_key] > 0 and question_key not in st.session_state.answered_questions:
+                    if st.session_state[attempt_key] == 1:
+                        st.caption("💪 One more try! You've got this!")
+                
+                st.divider()  # Separate questions visually
 
 def main():
     st.set_page_config(
