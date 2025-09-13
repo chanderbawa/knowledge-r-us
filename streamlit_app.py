@@ -65,9 +65,18 @@ class ContentAdapter:
         """Adapt article content for specific age group"""
         adapted = article.copy()
         
-        if age_group in ["6-8", "9-11"]:
+        if age_group == "6-8":
+            # Significantly simplify for youngest group
             adapted["content"] = self._simplify_text(article["content"], age_group)
             adapted["title"] = self._simplify_text(article["title"], age_group)
+        elif age_group == "9-11":
+            # Moderate simplification but keep more content
+            adapted["content"] = self._moderate_simplify(article["content"])
+            adapted["title"] = self._simplify_text(article["title"], age_group)
+        else:
+            # Keep full content for older students (12-14, 15-17)
+            # Just clean up any remaining HTML or formatting issues
+            adapted["content"] = self._clean_content(article["content"])
         
         return adapted
     
@@ -96,10 +105,47 @@ class ContentAdapter:
             simplified = ' '.join(short_sentences)
         
         return simplified
+    
+    def _moderate_simplify(self, text: str) -> str:
+        """Moderate simplification for ages 9-11 - keep content but make it accessible"""
+        # Replace some complex vocabulary but keep most content
+        vocab_replacements = self.VOCABULARY_REPLACEMENTS.get("moderate", {})
+        simplified = text
+        
+        for complex_word, simple_word in vocab_replacements.items():
+            simplified = re.sub(r'\b' + complex_word + r'\b', simple_word, simplified, flags=re.IGNORECASE)
+        
+        # Break very long sentences but keep all content
+        sentences = simplified.split('. ')
+        processed_sentences = []
+        
+        for sentence in sentences:
+            if len(sentence.split()) > 25:  # If sentence is very long
+                # Find a natural break point (comma, semicolon, etc.)
+                parts = re.split(r'[,;]', sentence, 1)
+                if len(parts) > 1:
+                    processed_sentences.append(parts[0].strip() + '.')
+                    processed_sentences.append(parts[1].strip())
+                else:
+                    processed_sentences.append(sentence)
+            else:
+                processed_sentences.append(sentence)
+        
+        return '. '.join(processed_sentences)
+    
+    def _clean_content(self, text: str) -> str:
+        """Clean content for older students without simplification"""
+        # Remove any remaining HTML tags
+        cleaned = re.sub(r'<[^>]+>', '', text)
+        # Clean up whitespace
+        cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+        # Ensure proper paragraph breaks
+        cleaned = re.sub(r'\n\s*\n', '\n\n', cleaned)
+        return cleaned
 
 @st.cache_data(ttl=3600)
 def fetch_news_articles(category: str = "science", max_articles: int = 3) -> List[Dict]:
-    """Fetch news articles from RSS feeds"""
+    """Fetch news articles from RSS feeds with enhanced content extraction"""
     articles = []
     
     if category not in NEWS_SOURCES:
@@ -111,9 +157,29 @@ def fetch_news_articles(category: str = "science", max_articles: int = 3) -> Lis
             
             for entry in feed.entries[:max_articles]:
                 try:
+                    # Extract more comprehensive content
+                    content = ""
+                    if hasattr(entry, 'content') and entry.content:
+                        # Get the first content entry
+                        content = entry.content[0].value if isinstance(entry.content, list) else entry.content
+                    elif hasattr(entry, 'summary') and entry.summary:
+                        content = entry.summary
+                    elif hasattr(entry, 'description') and entry.description:
+                        content = entry.description
+                    else:
+                        content = entry.title
+                    
+                    # Clean HTML tags and limit length appropriately
+                    import re
+                    content = re.sub(r'<[^>]+>', '', content)  # Remove HTML tags
+                    content = re.sub(r'\s+', ' ', content).strip()  # Clean whitespace
+                    
+                    # Don't limit content too aggressively - allow more for older kids
+                    content = content[:2500] if len(content) > 2500 else content
+                    
                     article_data = {
                         "title": entry.title,
-                        "content": getattr(entry, 'summary', entry.title)[:1000],  # Limit content
+                        "content": content,
                         "url": entry.link,
                         "published": str(datetime.now()),
                         "category": category,
@@ -135,25 +201,25 @@ def fetch_news_articles(category: str = "science", max_articles: int = 3) -> Lis
     return articles
 
 def get_fallback_articles() -> List[Dict]:
-    """Fallback articles when RSS feeds fail"""
+    """Fallback articles when RSS feeds fail - with age-appropriate content depth"""
     return [
         {
             "title": "Scientists Discover New Planet",
-            "content": "Astronomers have found a new planet outside our solar system. This planet is very far away but might have water. Scientists used powerful telescopes to see it. They are excited because finding planets helps us learn about space.",
+            "content": "Astronomers have made an exciting discovery in deep space - a new planet outside our solar system called an exoplanet. This distant world, located about 100 light-years from Earth, has captured scientists' attention because it might have conditions suitable for liquid water.\n\nUsing powerful space telescopes like the James Webb Space Telescope, researchers detected this planet by observing tiny changes in starlight as the planet passed in front of its host star. This method, called the transit technique, allows scientists to learn about the planet's size, atmosphere, and potential for supporting life.\n\nThe discovery is particularly significant because the planet orbits within its star's 'habitable zone' - the region where temperatures are just right for liquid water to exist. While we can't visit this planet with current technology, studying it helps us understand how planetary systems form and whether life might exist elsewhere in the universe. This research represents years of careful observation and data analysis by international teams of astronomers.",
             "category": "science",
             "url": "https://example.com/planet",
             "published": str(datetime.now())
         },
         {
             "title": "New Robot Helps Clean Ocean",
-            "content": "Engineers built a special robot that can clean plastic from the ocean. The robot floats on water and collects trash. This helps sea animals stay safe. Many fish and dolphins live in cleaner water now.",
+            "content": "Marine engineers have developed an innovative autonomous robot designed to tackle one of our planet's biggest environmental challenges: ocean pollution. This solar-powered device, roughly the size of a small boat, uses advanced sensors and artificial intelligence to identify and collect plastic waste floating on the ocean's surface.\n\nThe robot operates by scanning the water with cameras and using machine learning algorithms to distinguish between marine life and debris. Once plastic is detected, mechanical arms extend to carefully collect the waste without harming sea creatures. The collected plastic is stored in onboard compartments that can hold up to 500 kilograms of debris.\n\nEarly trials in the Pacific Ocean have shown promising results, with the robot collecting over 2,000 pieces of plastic waste in just one month. The technology represents a significant step forward in ocean conservation efforts. Scientists estimate that if deployed at scale, these robots could help remove millions of tons of plastic from our oceans, protecting marine ecosystems and the food chain that depends on healthy seas.",
             "category": "technology", 
             "url": "https://example.com/robot",
             "published": str(datetime.now())
         },
         {
             "title": "Trees Help Fight Climate Change",
-            "content": "Scientists learned that planting more trees helps our planet stay cool. Trees take in carbon dioxide and make oxygen. When we plant trees, we help animals have homes and make the air cleaner for everyone.",
+            "content": "Climate scientists have published new research highlighting the crucial role that forests play in combating global warming. Trees act as natural carbon capture systems, absorbing carbon dioxide from the atmosphere during photosynthesis and storing it in their wood, roots, and surrounding soil.\n\nThe study, conducted across multiple continents, found that mature forests can absorb up to 2.6 tons of carbon dioxide per acre annually. This process not only removes greenhouse gases from the atmosphere but also produces oxygen as a byproduct. Additionally, forests create cooling effects through transpiration - the process by which trees release water vapor through their leaves, naturally air-conditioning their surroundings.\n\nResearchers emphasize that protecting existing forests and planting new trees are among the most cost-effective strategies for addressing climate change. However, they note that different tree species and forest management practices can significantly impact carbon storage capacity. The findings support global reforestation initiatives and highlight the importance of sustainable forestry practices in our fight against climate change.",
             "category": "environment",
             "url": "https://example.com/trees", 
             "published": str(datetime.now())
