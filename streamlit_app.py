@@ -198,6 +198,22 @@ class QuestionGenerator:
                     "correct": "Rainforest",
                     "explanation": "Many butterflies live in rainforests where there are lots of flowers!"
                 }
+            elif age_group == "9-11":
+                return {
+                    "type": "science",
+                    "question": "Why do butterflies have colorful wing patterns?",
+                    "options": ["To look pretty", "To blend with flowers", "To scare enemies", "To fly faster"],
+                    "correct": "To blend with flowers",
+                    "explanation": "Butterflies use their wing patterns to blend with flowers and hide from predators!"
+                }
+            elif age_group in ["12-14", "15-17"]:
+                return {
+                    "type": "science",
+                    "question": "What does the discovery of new butterfly species tell us about biodiversity?",
+                    "options": ["There are few species left", "Ecosystems are simple", "Many species remain undiscovered", "All species are known"],
+                    "correct": "Many species remain undiscovered",
+                    "explanation": "Scientists believe thousands more species remain undiscovered, highlighting the importance of protecting ecosystems!"
+                }
         
         return None
 
@@ -215,6 +231,8 @@ def main():
         st.session_state.score = 0
     if 'questions_answered' not in st.session_state:
         st.session_state.questions_answered = 0
+    if 'answered_questions' not in st.session_state:
+        st.session_state.answered_questions = set()
     
     # Header
     st.title("🌟 Knowledge R Us")
@@ -286,17 +304,21 @@ def main():
                         
                         # Check answer button
                         if st.button(f"Check Answer", key=f"check_{question_key}"):
-                            if answer == question["correct"]:
-                                st.success(f"🎉 Correct! {question['explanation']}")
-                                st.session_state.score += 10
-                                st.session_state.questions_answered += 1
-                                st.balloons()
+                            if question_key not in st.session_state.answered_questions:
+                                st.session_state.answered_questions.add(question_key)
+                                if answer == question["correct"]:
+                                    st.success(f"🎉 Correct! {question['explanation']}")
+                                    st.session_state.score += 10
+                                    st.session_state.questions_answered += 1
+                                    st.balloons()
+                                else:
+                                    st.error(f"❌ Not quite right. {question['explanation']}")
+                                    st.session_state.questions_answered += 1
+                                
+                                # Rerun to update sidebar
+                                st.rerun()
                             else:
-                                st.error(f"❌ Not quite right. {question['explanation']}")
-                                st.session_state.questions_answered += 1
-                            
-                            # Rerun to update sidebar
-                            st.rerun()
+                                st.info("You've already answered this question!")
     
     with col2:
         st.header("🎮 Learning Quests")
