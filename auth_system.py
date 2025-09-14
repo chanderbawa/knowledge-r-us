@@ -176,7 +176,7 @@ class UserProfileManager:
         elif age <= 14:
             age_group = "12-14"
         else:
-            age_group = "15-17"
+            age_group = "15-18"
         
         new_profile = {
             "kid_id": kid_id,

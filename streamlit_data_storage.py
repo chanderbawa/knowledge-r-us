@@ -16,9 +16,11 @@ class StreamlitDataManager:
     """Enhanced data manager using Streamlit's persistence options"""
     
     def __init__(self):
-        # Try multiple storage approaches
+        # Use absolute path for database to ensure persistence
+        import os
+        self.data_dir = os.path.dirname(os.path.abspath(__file__))
+        self.db_path = os.path.join(self.data_dir, "knowledge_r_us.db")
         self.use_sqlite = True
-        self.db_path = "knowledge_r_us.db"
         self.init_database()
     
     def init_database(self):

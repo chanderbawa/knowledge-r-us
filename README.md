@@ -5,7 +5,7 @@ A cloud-compatible educational platform that transforms real news articles into 
 
 ## Features
 - **Real News Integration**: Live RSS feeds from Science Daily, TechCrunch, and National Geographic
-- **Age-Adaptive Content**: Multi-paragraph articles that automatically adjust vocabulary and complexity for different age groups (6-8, 9-11, 12-14, 15-17)
+- **Age-Adaptive Content**: Multi-paragraph articles that automatically adjust vocabulary and complexity for different age groups (6-8, 9-11, 12-14, 15-18)
 - **Comprehensive Question System**: Math, Science, and ELA questions generated from actual article content
 - **Smart Hint System**: Wrong answers trigger helpful hints with retry opportunities
 - **Learning Validation**: Detailed reasoning explanations for correct answers to reinforce understanding
@@ -40,7 +40,7 @@ The app will open in your browser at `http://localhost:8501`
 - **Ages 6-8**: Simplified vocabulary, short sentences, basic concepts
 - **Ages 9-11**: Moderate complexity with accessible explanations
 - **Ages 12-14**: Intermediate content with technical details
-- **Ages 15-17**: Full complexity articles with advanced concepts
+- **Ages 15-18**: Full complexity articles with advanced concepts
 
 ### 3. Comprehensive Question System
 - **Math Questions**: Multiplication, percentages, rate problems, light-years calculations
@@ -112,7 +112,7 @@ streamlit run streamlit_app.py
 ### Age-Appropriate Progression
 - **Elementary (6-11)**: Foundation building with supportive feedback
 - **Middle School (12-14)**: Critical thinking with technical vocabulary
-- **High School (15-17)**: Advanced analysis with full complexity content
+- **High School (15-18)**: Advanced analysis with full complexity content
 
 ## Contact
-Knowledge R Us - Transforming news into personalized learning experiences across Math, Science, and ELA for students aged 6-17.
+Knowledge R Us - Transforming news into personalized learning experiences across Math, Science, and ELA for students aged 6-18.

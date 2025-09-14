@@ -44,7 +44,7 @@ class ContentAdapter:
         "6-8": {"reading_level": 1, "vocab_complexity": "simple"},
         "9-11": {"reading_level": 2, "vocab_complexity": "moderate"},
         "12-14": {"reading_level": 3, "vocab_complexity": "intermediate"},
-        "15-17": {"reading_level": 4, "vocab_complexity": "advanced"}
+        "15-18": {"reading_level": 4, "vocab_complexity": "advanced"}
     }
     
     VOCABULARY_REPLACEMENTS = {
@@ -162,7 +162,7 @@ class QuestionGenerator:
                     "explanation": "100% - 47% = 53% is not converted"
                 }
         
-        elif age_group in ["12-14", "15-17"]:
+        elif age_group in ["12-14", "15-18"]:
             if "Mars" in title:
                 return {
                     "type": "math",
@@ -204,7 +204,7 @@ class QuestionGenerator:
                     "correct": "Radar technology",
                     "explanation": "Scientists used advanced radar technology on the Mars Reconnaissance Orbiter to find the water!"
                 }
-            elif age_group in ["12-14", "15-17"]:
+            elif age_group in ["12-14", "15-18"]:
                 return {
                     "type": "science",
                     "question": "Why is finding water on Mars important for future missions?",
@@ -230,7 +230,7 @@ class QuestionGenerator:
                     "correct": "To blend with flowers",
                     "explanation": "Butterflies use their wing patterns to blend with flowers and hide from predators!"
                 }
-            elif age_group in ["12-14", "15-17"]:
+            elif age_group in ["12-14", "15-18"]:
                 return {
                     "type": "science",
                     "question": "What does the discovery of new butterfly species tell us about biodiversity?",
@@ -267,8 +267,8 @@ def main():
         st.header("👤 User Profile")
         age_group = st.selectbox(
             "Select Age Group:",
-            ["6-8", "9-11", "12-14", "15-17"],
-            index=["6-8", "9-11", "12-14", "15-17"].index(st.session_state.user_age)
+            ["6-8", "9-11", "12-14", "15-18"],
+            index=["6-8", "9-11", "12-14", "15-18"].index(st.session_state.user_age)
         )
         st.session_state.user_age = age_group
         

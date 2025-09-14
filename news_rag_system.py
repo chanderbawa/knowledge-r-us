@@ -233,8 +233,8 @@ class NewsRAGSystem:
             Rewritten article for ages 12-14:
             """,
             
-            "15-17": """
-            Rewrite this news article for teenagers aged 15-17 years old:
+            "15-18": """
+            Rewrite this news article for teenagers aged 15-18 years old:
             - Use advanced vocabulary and concepts
             - Include detailed scientific, technical, or analytical information
             - Make connections to real-world implications
@@ -244,7 +244,7 @@ class NewsRAGSystem:
             Title: {title}
             Content: {content}
             
-            Rewritten article for ages 15-17:
+            Rewritten article for ages 15-18:
             """
         }
         
