@@ -7,16 +7,15 @@ Real news content with age-adaptive learning and user authentication
 import streamlit as st
 import json
 import bcrypt
+import logging
 from datetime import datetime
 import feedparser
 import re
-from auth_system import UserProfileManager
-from streamlit_data_storage import StreamlitDataManager
-from llm_api_integration import setup_llm_provider
-
+from typing import Dict, List
 # Import authentication system
 from auth_system import UserProfileManager, show_login_page, show_profile_selection, show_kid_dashboard
 from streamlit_data_storage import StreamlitDataManager
+from llm_api_integration import setup_llm_provider
 from pwa_config import add_pwa_config, add_mobile_styles, add_install_prompt
 
 # Configure logging
