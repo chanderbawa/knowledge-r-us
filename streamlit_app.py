@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Knowledge R Us - Cloud-Compatible Educational News App
-Real news content with age-adaptive learning
+Real news content with age-adaptive learning and user authentication
 """
 
 import streamlit as st
@@ -13,6 +13,9 @@ import feedparser
 import json
 import re
 import random
+
+# Import authentication system
+from auth_system import UserProfileManager, show_login_page, show_profile_selection, show_kid_dashboard
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -561,6 +564,15 @@ def display_article_with_questions(article: Dict, age_group: str, article_index:
                             st.session_state.answered_questions.add(question_key)
                             st.session_state.score += 10
                             st.session_state.questions_answered += 1
+                            
+                            # Update kid progress if authenticated
+                            if hasattr(st.session_state, 'selected_kid') and hasattr(st.session_state, 'profile_manager'):
+                                st.session_state.profile_manager.update_kid_progress(
+                                    st.session_state.selected_kid['kid_id'], 
+                                    score_increment=10, 
+                                    questions_increment=1
+                                )
+                            
                             st.balloons()
                         else:
                             if st.session_state[attempt_key] == 1:
@@ -578,6 +590,14 @@ def display_article_with_questions(article: Dict, age_group: str, article_index:
                                 st.session_state.questions_answered += 1
                                 # Give partial credit for trying
                                 st.session_state.score += 5
+                                
+                                # Update kid progress if authenticated
+                                if hasattr(st.session_state, 'selected_kid') and hasattr(st.session_state, 'profile_manager'):
+                                    st.session_state.profile_manager.update_kid_progress(
+                                        st.session_state.selected_kid['kid_id'], 
+                                        score_increment=5, 
+                                        questions_increment=1
+                                    )
                         
                         # Rerun to update sidebar
                         st.rerun()
@@ -593,14 +613,18 @@ def display_article_with_questions(article: Dict, age_group: str, article_index:
 
 def main():
     st.set_page_config(
-        page_title="Knowledge R Us - News Powered",
+        page_title="Knowledge R Us - Educational News",
         page_icon="🌟",
         layout="wide"
     )
     
+    # Initialize profile manager
+    if 'profile_manager' not in st.session_state:
+        st.session_state.profile_manager = UserProfileManager()
+    
     # Initialize session state
-    if 'user_age' not in st.session_state:
-        st.session_state.user_age = "9-11"
+    if 'authenticated' not in st.session_state:
+        st.session_state.authenticated = False
     if 'score' not in st.session_state:
         st.session_state.score = 0
     if 'questions_answered' not in st.session_state:
@@ -608,45 +632,79 @@ def main():
     if 'answered_questions' not in st.session_state:
         st.session_state.answered_questions = set()
     
-    # Header
-    st.title("🌟 Knowledge R Us")
-    st.subheader("Learn About the World Through Real News!")
+    # Authentication flow
+    if not st.session_state.authenticated:
+        show_login_page(st.session_state.profile_manager)
+        return
     
-    # Sidebar for user settings and controls
+    # Profile selection flow
+    if 'selected_kid' not in st.session_state:
+        show_profile_selection(st.session_state.profile_manager)
+        return
+    
+    # Kid dashboard flow
+    if 'learning_mode' not in st.session_state:
+        show_kid_dashboard(st.session_state.profile_manager)
+        return
+    
+    # Main learning interface
+    kid = st.session_state.selected_kid
+    age_group = kid['age_group']
+    
+    # Header with kid info
+    col1, col2 = st.columns([4, 1])
+    with col1:
+        st.title(f"🌟 {kid['name']}'s Learning Adventure")
+        st.caption(f"Age {kid['age']} • Learning from real news!")
+    
+    with col2:
+        if st.button("📊 Dashboard"):
+            del st.session_state.learning_mode
+            st.rerun()
+    
+    # Sidebar for controls and progress
     with st.sidebar:
-        st.header("👤 User Profile")
-        age_group = st.selectbox(
-            "Select Age Group:",
-            ["6-8", "9-11", "12-14", "15-17"],
-            index=["6-8", "9-11", "12-14", "15-17"].index(st.session_state.user_age)
-        )
-        st.session_state.user_age = age_group
+        st.header(f"{kid['avatar']} {kid['name']}")
+        
+        # Get current progress
+        current_progress = st.session_state.profile_manager.get_kid_progress(kid['kid_id'])
+        st.session_state.kid_progress = current_progress
         
         st.header("📰 News Controls")
         if st.button("🔄 Refresh News"):
             fetch_news_articles.clear()
             st.success("News refreshed!")
         
+        # Filter by kid's interests
+        interests = kid.get('interests', ['science'])
+        if 'science' in interests:
+            default_category = 'science'
+        elif 'technology' in interests:
+            default_category = 'technology'
+        elif 'environment' in interests:
+            default_category = 'environment'
+        else:
+            default_category = 'science'
+            
         category_filter = st.selectbox(
             "News Category:",
             ["science", "technology", "environment"],
-            index=0
+            index=["science", "technology", "environment"].index(default_category)
         )
         
         st.header("🏆 Progress")
-        st.metric("Score", st.session_state.score)
-        st.metric("Questions Answered", st.session_state.questions_answered)
+        st.metric("Score", current_progress.get('total_score', 0))
+        st.metric("Questions Answered", current_progress.get('questions_answered', 0))
+        st.metric("Articles Read", current_progress.get('articles_read', 0))
         
         # Achievement badges
         st.header("🎖️ Achievements")
-        if st.session_state.questions_answered >= 1:
-            st.success("🔰 First Question!")
-        if st.session_state.score >= 50:
-            st.success("⭐ Star Learner!")
-        if st.session_state.questions_answered >= 5:
-            st.success("🧠 Knowledge Seeker!")
-        if st.session_state.score >= 100:
-            st.success("🚀 News Expert!")
+        achievements = current_progress.get('achievements', [])
+        if achievements:
+            for achievement in achievements[-4:]:  # Show last 4 achievements
+                st.success(achievement['name'])
+        else:
+            st.info("Complete questions to earn achievements!")
     
     # Main content area
     col1, col2 = st.columns([2, 1])
@@ -666,11 +724,20 @@ def main():
             # Initialize content adapter
             content_adapter = ContentAdapter()
             
-            # Display articles
+            # Display articles and track reading
             for i, article in enumerate(articles):
                 # Adapt content for age group
                 adapted_article = content_adapter.adapt_content(article, age_group)
                 display_article_with_questions(adapted_article, age_group, i)
+                
+                # Track article reading (increment once per session per article)
+                article_read_key = f"read_{i}"
+                if article_read_key not in st.session_state:
+                    st.session_state[article_read_key] = True
+                    st.session_state.profile_manager.update_kid_progress(
+                        kid['kid_id'], 
+                        articles_increment=1
+                    )
                 
         except Exception as e:
             logger.error(f"Error loading articles: {e}")
@@ -687,7 +754,8 @@ def main():
         # Daily quest
         st.subheader("📅 Daily Quest")
         st.info("Read 3 articles and answer 5 questions correctly!")
-        progress = min(st.session_state.questions_answered / 5, 1.0)
+        daily_questions = current_progress.get('questions_answered', 0)
+        progress = min(daily_questions / 5, 1.0)
         st.progress(progress)
         
         if progress >= 1.0:
@@ -704,21 +772,23 @@ def main():
         else:
             st.write("🚀 Consider the broader implications and research connections!")
         
+        # Personalized encouragement
+        st.subheader(f"🌟 For {kid['name']}")
+        total_score = current_progress.get('total_score', 0)
+        if total_score == 0:
+            st.info("Welcome! Start by reading an article and answering questions.")
+        elif total_score < 50:
+            st.info("You're doing great! Keep learning to unlock more achievements.")
+        elif total_score < 100:
+            st.info("Awesome progress! You're becoming a real knowledge expert!")
+        else:
+            st.info("Amazing! You're a true Knowledge R Us champion! 🏆")
+        
         # System status
         st.subheader("📡 News System")
         st.success("✅ Real RSS Feeds Active")
         st.success("✅ Age-Adaptive Content")
-        st.success("✅ Dynamic Questions")
-        
-        # Fun facts
-        st.subheader("🤓 Fun Facts")
-        fun_facts = [
-            "This app gets real news from science websites!",
-            "Content changes based on your age group!",
-            "Questions are generated from actual news stories!",
-            "RSS feeds update automatically throughout the day!"
-        ]
-        st.info(random.choice(fun_facts))
+        st.success("✅ Personalized Learning")
 
 if __name__ == "__main__":
     main()
