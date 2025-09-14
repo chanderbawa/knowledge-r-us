@@ -65,7 +65,16 @@ class UserProfileManager:
                     "questions_answered": 0,
                     "articles_read": 0,
                     "achievements": [],
-                    "last_activity": str(datetime.now())
+                    "last_activity": str(datetime.now()),
+                    "stars": 0,
+                    "diamonds": 0,
+                    "level": 1,
+                    "level_progress": 0,
+                    "daily_streak": 0,
+                    "difficulty_level": 1,
+                    "correct_streak": 0,
+                    "wrong_streak": 0,
+                    "completed_articles": []
                 }
             }
             self._save_json(self.progress_file, initial_progress)
@@ -79,7 +88,7 @@ class UserProfileManager:
         return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
     
     def _load_json(self, filename: str) -> Dict:
-        """Load JSON data from file"""
+        """Load data from JSON file"""
         try:
             with open(filename, 'r') as f:
                 return json.load(f)
@@ -88,34 +97,51 @@ class UserProfileManager:
     
     def _save_json(self, filename: str, data: Dict):
         """Save data to JSON file"""
-        with open(filename, 'w') as f:
-            json.dump(data, f, indent=2)
+        try:
+            with open(filename, 'w') as f:
+                json.dump(data, f, indent=2)
+        except Exception as e:
+            print(f"Error saving {filename}: {e}")
     
     def register_parent(self, username: str, email: str, name: str, password: str) -> bool:
         """Register a new parent account"""
-        users_data = self._load_json(self.users_file)
-        
-        if username in users_data.get("usernames", {}):
-            return False  # Username already exists
-        
-        if "usernames" not in users_data:
-            users_data["usernames"] = {}
-        
-        users_data["usernames"][username] = {
-            "email": email,
-            "name": name,
-            "password": self._hash_password(password),
-            "created_date": str(datetime.now())
-        }
-        
-        self._save_json(self.users_file, users_data)
-        
-        # Initialize empty profiles for new parent
-        profiles_data = self._load_json(self.profiles_file)
-        profiles_data[username] = []
-        self._save_json(self.profiles_file, profiles_data)
-        
-        return True
+        try:
+            users_data = self._load_json(self.users_file)
+            
+            if username in users_data.get("usernames", {}):
+                print(f"DEBUG: Username {username} already exists")
+                return False  # Username already exists
+            
+            if "usernames" not in users_data:
+                users_data["usernames"] = {}
+            
+            users_data["usernames"][username] = {
+                "email": email,
+                "name": name,
+                "password": self._hash_password(password),
+                "created_date": str(datetime.now())
+            }
+            
+            print(f"DEBUG: Registering new user {username}")
+            self._save_json(self.users_file, users_data)
+            
+            # Verify the save worked
+            verification_data = self._load_json(self.users_file)
+            if username not in verification_data.get("usernames", {}):
+                print(f"ERROR: Failed to save user {username} to file")
+                return False
+            
+            # Initialize empty profiles for new parent
+            profiles_data = self._load_json(self.profiles_file)
+            profiles_data[username] = []
+            self._save_json(self.profiles_file, profiles_data)
+            
+            print(f"DEBUG: Successfully registered user {username}")
+            return True
+            
+        except Exception as e:
+            print(f"ERROR: Registration failed for {username}: {e}")
+            return False
     
     def authenticate_user(self, username: str, password: str) -> bool:
         """Authenticate user login"""

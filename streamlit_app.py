@@ -16,6 +16,7 @@ import random
 
 # Import authentication system
 from auth_system import UserProfileManager, show_login_page, show_profile_selection, show_kid_dashboard
+from streamlit_data_storage import StreamlitDataManager
 from pwa_config import add_pwa_config, add_mobile_styles, add_install_prompt
 
 # Configure logging
@@ -801,23 +802,42 @@ def main():
         initial_sidebar_state="expanded"
     )
     
-    # Initialize profile manager with persistent data
-    if 'profile_manager' not in st.session_state:
-        st.session_state.profile_manager = UserProfileManager()
+    # Initialize data manager with SQLite persistence
+    if 'data_manager' not in st.session_state:
+        st.session_state.data_manager = StreamlitDataManager()
     
-    # Debug: Show data file paths
+    # Keep backward compatibility with existing code
+    if 'profile_manager' not in st.session_state:
+        st.session_state.profile_manager = st.session_state.data_manager
+    
+    # Debug: Show data storage information
     if st.sidebar.button("🔍 Debug Info"):
-        st.sidebar.write("**Data Files:**")
-        st.sidebar.write(f"Users: {st.session_state.profile_manager.users_file}")
-        st.sidebar.write(f"Profiles: {st.session_state.profile_manager.profiles_file}")
-        st.sidebar.write(f"Progress: {st.session_state.profile_manager.progress_file}")
+        st.sidebar.write("**Storage Type:** SQLite Database")
+        st.sidebar.write(f"**Database:** {st.session_state.data_manager.db_path}")
         
-        # Check if files exist
-        import os
-        st.sidebar.write("**File Status:**")
-        st.sidebar.write(f"Users exists: {os.path.exists(st.session_state.profile_manager.users_file)}")
-        st.sidebar.write(f"Profiles exists: {os.path.exists(st.session_state.profile_manager.profiles_file)}")
-        st.sidebar.write(f"Progress exists: {os.path.exists(st.session_state.profile_manager.progress_file)}")
+        # Show database content
+        try:
+            import sqlite3
+            conn = sqlite3.connect(st.session_state.data_manager.db_path)
+            cursor = conn.cursor()
+            
+            cursor.execute("SELECT username FROM users")
+            users = [row[0] for row in cursor.fetchall()]
+            st.sidebar.write(f"**Users in DB:** {users}")
+            
+            cursor.execute("SELECT parent_username, COUNT(*) FROM kid_profiles GROUP BY parent_username")
+            profiles = dict(cursor.fetchall())
+            st.sidebar.write(f"**Kid Profiles:** {profiles}")
+            
+            conn.close()
+        except Exception as e:
+            st.sidebar.write(f"**DB Error:** {e}")
+        
+        # Show session state
+        st.sidebar.write("**Session State:**")
+        st.sidebar.write(f"Authenticated: {st.session_state.get('authenticated', False)}")
+        st.sidebar.write(f"Username: {st.session_state.get('username', 'None')}")
+        st.sidebar.write(f"Selected Kid: {st.session_state.get('selected_kid', {}).get('name', 'None')}")
     
     # Initialize session state
     if 'authenticated' not in st.session_state:

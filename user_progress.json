@@ -4,6 +4,15 @@
     "questions_answered": 0,
     "articles_read": 0,
     "achievements": [],
-    "last_activity": "2025-09-13 21:57:42.898737"
+    "last_activity": "2025-09-13 21:57:42.898737",
+    "stars": 0,
+    "diamonds": 0,
+    "level": 1,
+    "level_progress": 0,
+    "daily_streak": 0,
+    "difficulty_level": 1,
+    "correct_streak": 0,
+    "wrong_streak": 0,
+    "completed_articles": []
   }
 }
