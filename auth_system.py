@@ -17,9 +17,12 @@ class UserProfileManager:
     """Manages user authentication and kid profiles"""
     
     def __init__(self):
-        self.users_file = "users_data.json"
-        self.profiles_file = "kid_profiles.json"
-        self.progress_file = "user_progress.json"
+        # Use absolute paths to ensure data persistence
+        import os
+        self.data_dir = os.path.dirname(os.path.abspath(__file__))
+        self.users_file = os.path.join(self.data_dir, "users_data.json")
+        self.profiles_file = os.path.join(self.data_dir, "kid_profiles.json")
+        self.progress_file = os.path.join(self.data_dir, "user_progress.json")
         
         # Initialize data files if they don't exist
         self._initialize_data_files()

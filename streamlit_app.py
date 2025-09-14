@@ -793,21 +793,31 @@ def display_article_with_questions(article: Dict, age_group: str, article_index:
                                 st.divider()
 
 def main():
+    """Main application function"""
     st.set_page_config(
-        page_title="Knowledge R Us - Educational News",
+        page_title="Knowledge R Us",
         page_icon="🌟",
         layout="wide",
-        initial_sidebar_state="auto"
+        initial_sidebar_state="expanded"
     )
     
-    # Add PWA configuration for mobile app experience
-    add_pwa_config()
-    add_mobile_styles()
-    add_install_prompt()
-    
-    # Initialize profile manager
+    # Initialize profile manager with persistent data
     if 'profile_manager' not in st.session_state:
         st.session_state.profile_manager = UserProfileManager()
+    
+    # Debug: Show data file paths
+    if st.sidebar.button("🔍 Debug Info"):
+        st.sidebar.write("**Data Files:**")
+        st.sidebar.write(f"Users: {st.session_state.profile_manager.users_file}")
+        st.sidebar.write(f"Profiles: {st.session_state.profile_manager.profiles_file}")
+        st.sidebar.write(f"Progress: {st.session_state.profile_manager.progress_file}")
+        
+        # Check if files exist
+        import os
+        st.sidebar.write("**File Status:**")
+        st.sidebar.write(f"Users exists: {os.path.exists(st.session_state.profile_manager.users_file)}")
+        st.sidebar.write(f"Profiles exists: {os.path.exists(st.session_state.profile_manager.profiles_file)}")
+        st.sidebar.write(f"Progress exists: {os.path.exists(st.session_state.profile_manager.progress_file)}")
     
     # Initialize session state
     if 'authenticated' not in st.session_state:
