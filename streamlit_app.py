@@ -360,9 +360,6 @@ def display_article_with_questions(article: Dict, age_group: str, article_index:
             if tab_names:
                 tabs = st.tabs(tab_names)
                 
-                # Setup LLM provider in sidebar
-                setup_llm_provider()
-                
                 # Show debug info
                 with st.expander("🔧 Debug Info"):
                     st.write("**Database Status:**")
@@ -554,6 +551,11 @@ def main():
     # Remove any old data manager references
     if 'data_manager' in st.session_state:
         del st.session_state.data_manager
+    
+    # Setup LLM provider in sidebar (only once)
+    with st.sidebar:
+        st.header("🤖 AI Settings")
+        setup_llm_provider()
     
     # Debug: Show data storage information
     if st.sidebar.button("🔍 Debug Info"):
