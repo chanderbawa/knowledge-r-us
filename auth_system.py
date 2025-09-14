@@ -186,39 +186,59 @@ class UserProfileManager:
         progress_data = self._load_json(self.progress_file)
         return progress_data.get(kid_id, {})
     
-    def update_kid_progress(self, kid_id: str, score_increment: int = 0, questions_increment: int = 0, articles_increment: int = 0):
-        """Update kid's progress"""
-        progress_data = self._load_json(self.progress_file)
+    def update_kid_progress(self, kid_id: str, score_increment: int = 0, questions_increment: int = 0):
+        """Update progress for a specific kid"""
+        progress = self.load_user_progress()
         
-        if kid_id not in progress_data:
-            progress_data[kid_id] = {
-                "total_score": 0,
-                "questions_answered": 0,
-                "articles_read": 0,
-                "achievements": [],
-                "last_activity": str(datetime.now()),
-                "daily_progress": {}
+        if kid_id not in progress:
+            progress[kid_id] = {
+                'total_score': 0,
+                'questions_answered': 0,
+                'achievements': [],
+                'daily_streak': 0,
+                'last_activity': None,
+                'stars': 0,
+                'diamonds': 0,
+                'level': 1,
+                'level_progress': 0
             }
         
-        progress = progress_data[kid_id]
-        progress["total_score"] += score_increment
-        progress["questions_answered"] += questions_increment
-        progress["articles_read"] += articles_increment
-        progress["last_activity"] = str(datetime.now())
+        # Update scores and questions
+        progress[kid_id]['total_score'] += score_increment
+        progress[kid_id]['questions_answered'] += questions_increment
+        progress[kid_id]['last_activity'] = datetime.now().isoformat()
         
-        # Track daily progress
-        today = str(date.today())
-        if today not in progress["daily_progress"]:
-            progress["daily_progress"][today] = {"score": 0, "questions": 0, "articles": 0}
-        
-        progress["daily_progress"][today]["score"] += score_increment
-        progress["daily_progress"][today]["questions"] += questions_increment
-        progress["daily_progress"][today]["articles"] += articles_increment
+        # Award stars and diamonds based on performance
+        self._award_recognition(progress[kid_id], score_increment, questions_increment)
         
         # Check for new achievements
-        self._check_achievements(progress)
+        self._check_achievements(progress[kid_id])
         
-        self._save_json(self.progress_file, progress_data)
+        self.save_user_progress(progress)
+    
+    def _award_recognition(self, progress: Dict, score_increment: int, questions_increment: int):
+        """Award stars and diamonds based on performance"""
+        # Award stars for correct answers (10 points)
+        if score_increment == 10:
+            progress['stars'] += 1
+            
+        # Award diamonds for exceptional performance
+        # Diamond for getting 3 questions right in a row
+        if progress['total_score'] > 0 and progress['total_score'] % 30 == 0:
+            progress['diamonds'] += 1
+            
+        # Level progression based on total score
+        old_level = progress['level']
+        new_level = min(10, (progress['total_score'] // 100) + 1)
+        progress['level'] = new_level
+        
+        # Calculate level progress (0-100%)
+        score_in_level = progress['total_score'] % 100
+        progress['level_progress'] = score_in_level
+        
+        # Award bonus diamond for leveling up
+        if new_level > old_level:
+            progress['diamonds'] += 1
     
     def _check_achievements(self, progress: Dict):
         """Check and award achievements"""
@@ -376,47 +396,110 @@ def show_profile_selection(profile_manager: UserProfileManager):
                     del st.session_state[key]
             st.rerun()
 
-def show_kid_dashboard(profile_manager: UserProfileManager):
-    """Display dashboard for selected kid"""
-    kid = st.session_state.selected_kid
-    progress = st.session_state.kid_progress
+def show_kid_dashboard(profile_manager: UserProfileManager, selected_kid: Dict):
+    """Display kid dashboard with progress and achievements"""
+    st.title(f"🌟 Welcome back, {selected_kid['name']}!")
     
-    # Header with kid info and switch profile option
-    col1, col2 = st.columns([3, 1])
+    # Get kid's progress
+    progress = profile_manager.get_kid_progress(selected_kid['kid_id'])
+    
+    # Display recognition metrics
+    col1, col2, col3, col4, col5 = st.columns(5)
+    
     with col1:
-        st.title(f"{kid['avatar']} {kid['name']}'s Learning Journey")
-        st.caption(f"Age {kid['age']} • {kid['age_group']} years")
+        st.metric("📊 Total Score", progress.get('total_score', 0))
     
     with col2:
-        if st.button("🔄 Switch Profile"):
-            del st.session_state.selected_kid
-            del st.session_state.kid_progress
-            st.rerun()
+        st.metric("⭐ Stars Earned", progress.get('stars', 0))
     
-    # Progress overview
-    st.header("📊 Progress Overview")
-    
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric("Total Score", progress.get('total_score', 0))
-    with col2:
-        st.metric("Questions Answered", progress.get('questions_answered', 0))
     with col3:
-        st.metric("Articles Read", progress.get('articles_read', 0))
+        st.metric("💎 Diamonds", progress.get('diamonds', 0))
+    
     with col4:
-        achievements = progress.get('achievements', [])
-        st.metric("Achievements", len(achievements))
+        st.metric("🎯 Level", progress.get('level', 1))
     
-    # Achievements
+    with col5:
+        st.metric("❓ Questions", progress.get('questions_answered', 0))
+    
+    # Level progress bar
+    st.subheader(f"🎯 Level {progress.get('level', 1)} Progress")
+    level_progress = progress.get('level_progress', 0)
+    progress_bar = st.progress(level_progress / 100.0)
+    st.write(f"Progress: {level_progress}/100 points to next level")
+    
+    # Recognition display
+    st.subheader("🌟 Your Recognition")
+    
+    # Create visual display of stars and diamonds
+    stars = progress.get('stars', 0)
+    diamonds = progress.get('diamonds', 0)
+    
+    col_stars, col_diamonds = st.columns(2)
+    
+    with col_stars:
+        st.write("**⭐ Stars Collected:**")
+        if stars > 0:
+            # Display stars in rows of 10
+            star_display = ""
+            for i in range(min(stars, 50)):  # Limit display to 50 stars
+                star_display += "⭐"
+                if (i + 1) % 10 == 0:
+                    star_display += "\n"
+            st.text(star_display)
+            if stars > 50:
+                st.write(f"... and {stars - 50} more stars!")
+        else:
+            st.write("Answer questions correctly to earn stars!")
+    
+    with col_diamonds:
+        st.write("**💎 Diamonds Earned:**")
+        if diamonds > 0:
+            diamond_display = "💎 " * min(diamonds, 20)  # Limit display to 20 diamonds
+            st.text(diamond_display)
+            if diamonds > 20:
+                st.write(f"... and {diamonds - 20} more diamonds!")
+        else:
+            st.write("Get 3 correct answers in a row or level up to earn diamonds!")
+    
+    # Show achievements
+    achievements = progress.get('achievements', [])
     if achievements:
-        st.header("🏆 Achievements")
-        achievement_cols = st.columns(min(len(achievements), 4))
-        for i, achievement in enumerate(achievements):
-            with achievement_cols[i % 4]:
-                st.success(achievement['name'])
+        st.subheader("🏆 Your Achievements")
+        for achievement in achievements[-3:]:  # Show last 3 achievements
+            st.success(f"{achievement['name']} - Earned on {achievement['earned_date'][:10]}")
     
-    # Ready to learn button
-    st.header("🚀 Ready to Learn?")
-    if st.button("Start Learning!", type="primary"):
-        st.session_state.learning_mode = True
+    # Daily quest progress
+    st.subheader("📅 Today's Quest")
+    daily_goal = 3  # Questions per day
+    questions_today = progress.get('questions_answered', 0) % daily_goal
+    
+    progress_bar = st.progress(min(questions_today / daily_goal, 1.0))
+    st.write(f"Progress: {questions_today}/{daily_goal} questions answered today")
+    
+    if questions_today >= daily_goal:
+        st.success("🎉 Daily quest completed! Great job!")
+    else:
+        st.info(f"Keep going! {daily_goal - questions_today} more questions to complete today's quest.")
+    
+    # Recognition tips
+    with st.expander("🎯 How to Earn More Recognition"):
+        st.write("""
+        **⭐ Stars:** Earn 1 star for each correct answer!
+        
+        **💎 Diamonds:** 
+        - Get 3 correct answers in a row (every 30 points)
+        - Level up to the next level
+        
+        **🎯 Levels:** 
+        - Level 1: 0-99 points
+        - Level 2: 100-199 points  
+        - Level 3: 200-299 points
+        - ... and so on up to Level 10!
+        
+        Keep learning to collect more stars and diamonds! 🌟
+        """)
+    
+    # Start learning button
+    if st.button("🚀 Start Learning!", type="primary", use_container_width=True):
+        st.session_state.show_dashboard = False
         st.rerun()

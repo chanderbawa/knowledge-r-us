@@ -84,6 +84,7 @@ def add_mobile_styles():
             height: 3rem;
             font-size: 1.1rem;
             border-radius: 10px;
+            width: 100%;
         }
         
         /* Optimize form inputs for mobile */
@@ -107,6 +108,19 @@ def add_mobile_styles():
             gap: 1rem;
         }
         
+        .stRadio > div > label {
+            padding: 0.75rem;
+            margin: 0.25rem 0;
+            border-radius: 8px;
+            background-color: #f0f2f6;
+            cursor: pointer;
+            display: block;
+        }
+        
+        .stRadio > div > label:hover {
+            background-color: #e6e9ef;
+        }
+        
         /* Optimize metrics display */
         .metric-container {
             text-align: center;
@@ -115,6 +129,25 @@ def add_mobile_styles():
         /* Better sidebar on mobile */
         .css-1d391kg {
             padding-top: 1rem;
+        }
+        
+        /* Ensure feedback messages are visible */
+        .stAlert {
+            margin: 1rem 0;
+            padding: 1rem;
+            border-radius: 8px;
+            font-size: 1rem;
+        }
+        
+        /* Make tabs more touch-friendly */
+        .stTabs > div > div > div {
+            gap: 0.5rem;
+        }
+        
+        .stTabs [data-baseweb="tab"] {
+            padding: 0.75rem 1rem;
+            font-size: 1rem;
+            min-height: 3rem;
         }
     }
     
