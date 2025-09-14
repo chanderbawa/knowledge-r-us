@@ -1,0 +1,16 @@
+{
+  "demo_parent": [
+    {
+      "kid_id": "demo_kid_1",
+      "name": "Alex",
+      "age": 10,
+      "age_group": "9-11",
+      "interests": [
+        "science",
+        "technology"
+      ],
+      "created_date": "2025-09-13 21:57:42.898443",
+      "avatar": "\ud83e\uddd1\u200d\ud83d\ude80"
+    }
+  ]
+}
