@@ -16,6 +16,7 @@ import random
 
 # Import authentication system
 from auth_system import UserProfileManager, show_login_page, show_profile_selection, show_kid_dashboard
+from pwa_config import add_pwa_config, add_mobile_styles, add_install_prompt
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -615,8 +616,14 @@ def main():
     st.set_page_config(
         page_title="Knowledge R Us - Educational News",
         page_icon="🌟",
-        layout="wide"
+        layout="wide",
+        initial_sidebar_state="auto"
     )
+    
+    # Add PWA configuration for mobile app experience
+    add_pwa_config()
+    add_mobile_styles()
+    add_install_prompt()
     
     # Initialize profile manager
     if 'profile_manager' not in st.session_state:
