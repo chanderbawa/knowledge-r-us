@@ -186,7 +186,7 @@ class UserProfileManager:
         progress_data = self._load_json(self.progress_file)
         return progress_data.get(kid_id, {})
     
-    def update_kid_progress(self, kid_id: str, score_increment: int = 0, questions_increment: int = 0):
+    def update_kid_progress(self, kid_id: str, score_increment: int = 0, questions_increment: int = 0, article_id: str = None):
         """Update progress for a specific kid"""
         progress = self.load_user_progress()
         
@@ -200,13 +200,33 @@ class UserProfileManager:
                 'stars': 0,
                 'diamonds': 0,
                 'level': 1,
-                'level_progress': 0
+                'level_progress': 0,
+                'completed_articles': [],
+                'current_article_questions': {},
+                'difficulty_level': 1,  # 1=Easy, 2=Medium, 3=Hard
+                'correct_streak': 0,
+                'wrong_streak': 0
             }
         
         # Update scores and questions
         progress[kid_id]['total_score'] += score_increment
         progress[kid_id]['questions_answered'] += questions_increment
         progress[kid_id]['last_activity'] = datetime.now().isoformat()
+        
+        # Track article completion if provided
+        if article_id:
+            # Ensure completed_articles and current_article_questions exist
+            if 'completed_articles' not in progress[kid_id]:
+                progress[kid_id]['completed_articles'] = []
+            if 'current_article_questions' not in progress[kid_id]:
+                progress[kid_id]['current_article_questions'] = {}
+                
+            # Mark article as completed if all questions answered
+            if article_id not in progress[kid_id]['completed_articles']:
+                progress[kid_id]['completed_articles'].append(article_id)
+        
+        # Update difficulty based on performance
+        self._update_difficulty(progress[kid_id], score_increment > 0)
         
         # Award stars and diamonds based on performance
         self._award_recognition(progress[kid_id], score_increment, questions_increment)
@@ -240,23 +260,94 @@ class UserProfileManager:
         if new_level > old_level:
             progress['diamonds'] += 1
     
+    def _update_difficulty(self, progress: Dict, is_correct: bool):
+        """Update difficulty level based on performance"""
+        # Ensure difficulty tracking fields exist
+        if 'difficulty_level' not in progress:
+            progress['difficulty_level'] = 1
+        if 'correct_streak' not in progress:
+            progress['correct_streak'] = 0
+        if 'wrong_streak' not in progress:
+            progress['wrong_streak'] = 0
+            
+        if is_correct:
+            progress['correct_streak'] += 1
+            progress['wrong_streak'] = 0
+            
+            # Increase difficulty after 3 correct answers in a row
+            if progress['correct_streak'] >= 3 and progress['difficulty_level'] < 3:
+                progress['difficulty_level'] += 1
+                progress['correct_streak'] = 0
+        else:
+            progress['wrong_streak'] += 1
+            progress['correct_streak'] = 0
+            
+            # Decrease difficulty after 2 wrong answers in a row
+            if progress['wrong_streak'] >= 2 and progress['difficulty_level'] > 1:
+                progress['difficulty_level'] -= 1
+                progress['wrong_streak'] = 0
+    
+    def get_difficulty_level(self, kid_id: str) -> int:
+        """Get current difficulty level for a kid"""
+        progress = self.load_user_progress()
+        if kid_id not in progress:
+            return 1
+        return progress[kid_id].get('difficulty_level', 1)
+    
+    def mark_article_completed(self, kid_id: str, article_id: str):
+        """Mark an article as completed for a kid"""
+        progress = self.load_user_progress()
+        
+        if kid_id not in progress:
+            return
+            
+        if 'completed_articles' not in progress[kid_id]:
+            progress[kid_id]['completed_articles'] = []
+            
+        if article_id not in progress[kid_id]['completed_articles']:
+            progress[kid_id]['completed_articles'].append(article_id)
+            
+        self.save_user_progress(progress)
+    
+    def is_article_completed(self, kid_id: str, article_id: str) -> bool:
+        """Check if an article is completed by a kid"""
+        progress = self.load_user_progress()
+        
+        if kid_id not in progress:
+            return False
+            
+        completed_articles = progress[kid_id].get('completed_articles', [])
+        return article_id in completed_articles
+    
+    def get_completed_articles(self, kid_id: str) -> List[str]:
+        """Get list of completed articles for a kid"""
+        progress = self.load_user_progress()
+        
+        if kid_id not in progress:
+            return []
+            
+        return progress[kid_id].get('completed_articles', [])
+    
     def _check_achievements(self, progress: Dict):
         """Check and award achievements"""
         achievements = progress.get("achievements", [])
         
         # Define achievement thresholds
+        completed_articles_count = len(progress.get('completed_articles', []))
         achievement_checks = [
             ("first_question", "🔰 First Question!", progress["questions_answered"] >= 1),
+            ("first_article", "📰 First Article Complete!", completed_articles_count >= 1),
             ("star_learner", "⭐ Star Learner!", progress["total_score"] >= 50),
             ("knowledge_seeker", "🧠 Knowledge Seeker!", progress["questions_answered"] >= 5),
             ("news_expert", "🚀 News Expert!", progress["total_score"] >= 100),
-            ("daily_reader", "📚 Daily Reader!", progress["articles_read"] >= 10),
+            ("daily_reader", "📚 Daily Reader!", completed_articles_count >= 5),
             ("math_whiz", "🔢 Math Whiz!", progress["questions_answered"] >= 20),
-            ("science_explorer", "🔬 Science Explorer!", progress["total_score"] >= 200)
+            ("science_explorer", "🔬 Science Explorer!", progress["total_score"] >= 200),
+            ("news_master", "🏆 News Master!", completed_articles_count >= 10)
         ]
         
         for achievement_id, achievement_name, condition in achievement_checks:
-            if condition and achievement_id not in [a["id"] for a in achievements]:
+            if condition and achievement_id not in [a.get("id") for a in achievements]:
                 achievements.append({
                     "id": achievement_id,
                     "name": achievement_name,
@@ -416,7 +507,9 @@ def show_kid_dashboard(profile_manager: UserProfileManager, selected_kid: Dict):
         st.metric("💎 Diamonds", progress.get('diamonds', 0))
     
     with col4:
-        st.metric("🎯 Level", progress.get('level', 1))
+        difficulty_level = progress.get('difficulty_level', 1)
+        difficulty_names = {1: "Easy", 2: "Medium", 3: "Hard"}
+        st.metric("🎯 Difficulty", f"{difficulty_names[difficulty_level]} ({difficulty_level})")
     
     with col5:
         st.metric("❓ Questions", progress.get('questions_answered', 0))

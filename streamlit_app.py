@@ -147,10 +147,17 @@ class ContentAdapter:
         cleaned = re.sub(r'\n\s*\n', '\n\n', cleaned)
         return cleaned
 
+def generate_article_id(article: Dict) -> str:
+    """Generate a unique ID for an article based on title and content"""
+    import hashlib
+    content = f"{article['title']}{article.get('content', '')[:100]}"
+    return hashlib.md5(content.encode()).hexdigest()[:12]
+
 @st.cache_data(ttl=3600)
-def fetch_news_articles(category: str = "science", max_articles: int = 3) -> List[Dict]:
+def fetch_news_articles(category: str = "science", max_articles: int = 3, completed_articles: List[str] = None) -> List[Dict]:
     """Fetch news articles from RSS feeds with enhanced content extraction"""
     articles = []
+    completed_articles = completed_articles or []
     
     if category not in NEWS_SOURCES:
         return get_fallback_articles()
@@ -159,50 +166,50 @@ def fetch_news_articles(category: str = "science", max_articles: int = 3) -> Lis
         try:
             feed = feedparser.parse(rss_url)
             
-            for entry in feed.entries[:max_articles]:
+            for entry in feed.entries[:max_articles * 2]:  # Get more entries to filter
                 try:
-                    # Extract more comprehensive content
+                    # Extract content with better cleaning
                     content = ""
                     if hasattr(entry, 'content') and entry.content:
-                        # Get the first content entry
                         content = entry.content[0].value if isinstance(entry.content, list) else entry.content
-                    elif hasattr(entry, 'summary') and entry.summary:
+                    elif hasattr(entry, 'summary'):
                         content = entry.summary
-                    elif hasattr(entry, 'description') and entry.description:
+                    elif hasattr(entry, 'description'):
                         content = entry.description
-                    else:
-                        content = entry.title
                     
-                    # Clean HTML tags and limit length appropriately
-                    import re
-                    content = re.sub(r'<[^>]+>', '', content)  # Remove HTML tags
-                    content = re.sub(r'\s+', ' ', content).strip()  # Clean whitespace
-                    
-                    # Don't limit content too aggressively - allow more for older kids
-                    content = content[:2500] if len(content) > 2500 else content
-                    
-                    article_data = {
-                        "title": entry.title,
-                        "content": content,
-                        "url": entry.link,
-                        "published": str(datetime.now()),
-                        "category": category,
-                        "source": rss_url
+                    article = {
+                        'title': entry.title,
+                        'content': content,
+                        'url': entry.link,
+                        'source': feed.feed.title if hasattr(feed.feed, 'title') else 'News Source',
+                        'published': entry.published if hasattr(entry, 'published') else 'Recent',
+                        'category': category
                     }
-                    articles.append(article_data)
+                    
+                    # Generate unique ID and check if not completed
+                    article['id'] = generate_article_id(article)
+                    if article['id'] not in completed_articles:
+                        articles.append(article)
+                        
+                    if len(articles) >= max_articles:
+                        break
+                        
                 except Exception as e:
-                    logger.error(f"Error processing article: {e}")
+                    logger.warning(f"Error processing entry: {e}")
                     continue
                     
         except Exception as e:
-            logger.error(f"Error fetching RSS feed: {e}")
+            logger.warning(f"Failed to fetch from {rss_url}: {e}")
             continue
     
-    # If no articles fetched, use fallback
+    # If no new articles fetched, use fallback articles (with IDs)
     if not articles:
-        articles = get_fallback_articles()
+        for sample_article in get_fallback_articles():
+            sample_article['id'] = generate_article_id(sample_article)
+            if sample_article['id'] not in completed_articles:
+                articles.append(sample_article)
     
-    return articles
+    return articles[:max_articles]
 
 def get_fallback_articles() -> List[Dict]:
     """Fallback articles when RSS feeds fail - with age-appropriate content depth"""
@@ -233,43 +240,62 @@ def get_fallback_articles() -> List[Dict]:
 class QuestionGenerator:
     """Generates STEM + ELA questions based on articles and age groups"""
     
-    def generate_questions(self, article: Dict, age_group: str) -> List[Dict]:
-        """Generate age-appropriate questions for Math, Science, and ELA"""
+    def __init__(self):
+        pass
+    
+    def generate_questions(self, article: Dict, age_group: str, difficulty_level: int = 1) -> List[Dict]:
+        """Generate age-appropriate questions for an article with adaptive difficulty"""
         questions = []
         
-        # Math questions
-        math_q = self._generate_math_question(article, age_group)
-        if math_q:
-            questions.append(math_q)
+        # Generate one question of each type with difficulty adjustment
+        math_q = self._generate_math_question(article, age_group, difficulty_level)
+        science_q = self._generate_science_question(article, age_group, difficulty_level)
+        ela_q = self._generate_ela_question(article, age_group, difficulty_level)
         
-        # Science questions
-        science_q = self._generate_science_question(article, age_group)
-        if science_q:
-            questions.append(science_q)
-        
-        # ELA (English Language Arts) questions
-        ela_q = self._generate_ela_question(article, age_group)
-        if ela_q:
-            questions.append(ela_q)
+        questions.extend([math_q, science_q, ela_q])
         
         return questions
     
-    def _generate_math_question(self, article: Dict, age_group: str) -> Dict:
+    def _generate_math_question(self, article: Dict, age_group: str, difficulty_level: int = 1) -> Dict:
         """Generate math questions based on article content"""
         title = article["title"].lower()
         content = article["content"].lower()
         
         if age_group == "6-8":
             if "planet" in title or "space" in title:
-                return {
-                    "type": "math",
-                    "question": "If we find 3 new planets and each has 2 moons, how many moons total?",
-                    "options": ["4", "5", "6", "7"],
-                    "correct": "6",
-                    "hint": "Try multiplying: How many planets × How many moons each planet has?",
-                    "explanation": "3 planets × 2 moons = 6 moons total!",
-                    "reasoning": "This is multiplication! When we have groups of the same size, we multiply the number of groups by the size of each group."
-                }
+                if difficulty_level == 1:  # Easy
+                    return {
+                        "type": "math",
+                        "question": "If we find 2 new planets and each has 1 moon, how many moons total?",
+                        "options": ["1", "2", "3", "4"],
+                        "correct": "2",
+                        "hint": "Count: 1 + 1 = ?",
+                        "explanation": "2 planets × 1 moon each = 2 moons total!",
+                        "reasoning": "This is simple addition: 1 moon + 1 moon = 2 moons.",
+                        "wrong_explanation": "Remember to count all the moons from both planets together."
+                    }
+                elif difficulty_level == 2:  # Medium
+                    return {
+                        "type": "math",
+                        "question": "If we find 3 new planets and each has 2 moons, how many moons total?",
+                        "options": ["4", "5", "6", "7"],
+                        "correct": "6",
+                        "hint": "Count: 2 + 2 + 2 = ?",
+                        "explanation": "3 planets × 2 moons each = 6 moons total!",
+                        "reasoning": "This is multiplication: when we have groups of the same size, we multiply the number of groups by the size of each group.",
+                        "wrong_explanation": "You need to multiply, not just add the planet number and moon number. Count all moons from all planets."
+                    }
+                else:  # Hard
+                    return {
+                        "type": "math",
+                        "question": "If we find 4 new planets, 2 have 3 moons each and 2 have 1 moon each, how many moons total?",
+                        "options": ["6", "7", "8", "10"],
+                        "correct": "8",
+                        "hint": "Calculate each group separately: (2×3) + (2×1) = ?",
+                        "explanation": "(2 planets × 3 moons) + (2 planets × 1 moon) = 6 + 2 = 8 moons!",
+                        "reasoning": "This involves grouping and adding different multiplication results together.",
+                        "wrong_explanation": "Break this into two groups: planets with 3 moons and planets with 1 moon, then add the totals."
+                    }
             elif "robot" in title or "ocean" in title:
                 return {
                     "type": "math", 
@@ -337,7 +363,7 @@ class QuestionGenerator:
         
         return None
     
-    def _generate_science_question(self, article: Dict, age_group: str) -> Dict:
+    def _generate_science_question(self, article: Dict, age_group: str, difficulty_level: int = 1) -> Dict:
         """Generate science questions based on article content"""
         title = article["title"].lower()
         content = article["content"].lower()
@@ -419,7 +445,7 @@ class QuestionGenerator:
                 "reasoning": "The scientific method is a systematic way to understand the world: observe phenomena, form hypotheses (educated guesses), then test them with experiments."
             }
     
-    def _generate_ela_question(self, article: Dict, age_group: str) -> Dict:
+    def _generate_ela_question(self, article: Dict, age_group: str, difficulty_level: int = 1) -> Dict:
         """Generate ELA (English Language Arts) questions based on article content"""
         title = article["title"].lower()
         content = article["content"].lower()
@@ -500,15 +526,57 @@ class QuestionGenerator:
                     "reasoning": "Tone is the author's attitude toward the subject. Positive words like 'exciting', 'breakthrough', and 'promising' show optimism."
                 }
         
-        return {
-            "type": "ela",
-            "question": "What type of text is this article?",
-            "options": ["Fiction story", "News article", "Poem", "Recipe"],
-            "correct": "News article",
-            "hint": "Think about where you might read this and what kind of information it gives.",
-            "explanation": "This is a news article that tells us about real events!",
-            "reasoning": "News articles inform readers about current events and real happenings in the world, which is what this text does."
-        }
+        if difficulty_level == 1:  # Easy
+            return {
+                "type": "ela",
+                "question": "What type of text is this article?",
+                "options": ["Fiction story", "News article", "Poem", "Recipe"],
+                "correct": "News article",
+                "hint": "Think about where you might read this and what kind of information it gives.",
+                "explanation": "This is a news article that tells us about real events!",
+                "reasoning": "News articles inform readers about current events and real happenings in the world, which is what this text does.",
+                "wrong_explanation": "Fiction stories are made-up tales, poems have rhythm and rhyme, and recipes tell you how to cook. This text reports real scientific discoveries."
+            }
+        elif difficulty_level == 2:  # Medium
+            return {
+                "type": "ela",
+                "question": "What is the main purpose of this article?",
+                "options": ["To entertain readers", "To inform about discoveries", "To sell products", "To teach cooking"],
+                "correct": "To inform about discoveries",
+                "hint": "Think about why someone would write about scientific findings.",
+                "explanation": "The article's main purpose is to inform readers about new scientific discoveries!",
+                "reasoning": "Informational texts like news articles are written to share factual information and educate readers about real events.",
+                "wrong_explanation": "While the article might be interesting, its primary goal isn't entertainment, selling, or cooking - it's sharing scientific information."
+            }
+        else:  # Hard
+            return {
+                "type": "ela",
+                "question": "Which writing technique does the author use to make complex scientific concepts accessible?",
+                "options": ["Using only technical terms", "Providing analogies and examples", "Writing in rhyme", "Using bullet points only"],
+                "correct": "Providing analogies and examples",
+                "hint": "Look for comparisons that help explain difficult ideas in simpler terms.",
+                "explanation": "The author uses analogies and examples to help readers understand complex scientific concepts!",
+                "reasoning": "Good science writing often uses familiar comparisons and concrete examples to make abstract concepts easier to understand.",
+                "wrong_explanation": "Technical terms alone would be confusing, rhyming isn't used in science articles, and bullet points are just formatting - analogies and examples actually explain the concepts."
+            }
+
+def check_if_article_completed(article_index: int) -> bool:
+    """Check if all questions for an article are completed"""
+    # Count total questions for this article
+    total_questions = 0
+    answered_questions = 0
+    
+    for question_type in ['math', 'science', 'ela']:
+        for j in range(3):  # Assuming max 3 questions per type
+            question_key = f"q_{article_index}_{question_type}_{j}"
+            if question_key in st.session_state.get('answered_questions', set()):
+                answered_questions += 1
+            # Check if question exists by looking for attempt counter
+            attempt_key = f"attempts_{question_key}"
+            if attempt_key in st.session_state:
+                total_questions += 1
+    
+    return total_questions > 0 and answered_questions >= total_questions
 
 def display_article_with_questions(article: Dict, age_group: str, article_index: int):
     """Display article with generated questions"""
@@ -528,9 +596,15 @@ def display_article_with_questions(article: Dict, age_group: str, article_index:
         # Display article content
         st.write(article['content'])
         
-        # Generate and display questions
+        # Generate and display questions with adaptive difficulty
         question_generator = QuestionGenerator()
-        questions = question_generator.generate_questions(article, age_group)
+        
+        # Get difficulty level for authenticated users
+        difficulty_level = 1
+        if hasattr(st.session_state, 'selected_kid') and hasattr(st.session_state, 'profile_manager'):
+            difficulty_level = st.session_state.profile_manager.get_difficulty_level(st.session_state.selected_kid['kid_id'])
+        
+        questions = question_generator.generate_questions(article, age_group, difficulty_level)
         
         if questions:
             st.subheader("🤔 Test Your Knowledge!")
@@ -569,9 +643,12 @@ def display_article_with_questions(article: Dict, age_group: str, article_index:
                             if attempt_key not in st.session_state:
                                 st.session_state[attempt_key] = 0
                             
-                            # Show question with checkmark if answered correctly
+                            # Show question with status indicator
                             if question_key in st.session_state.answered_questions:
                                 st.write(f"**Question {j+1}:** ✅")
+                                st.write(question["question"])
+                            elif st.session_state[attempt_key] > 0:
+                                st.write(f"**Question {j+1}:** ❌")
                                 st.write(question["question"])
                             else:
                                 st.write(f"**Question {j+1}:**")
@@ -595,25 +672,40 @@ def display_article_with_questions(article: Dict, age_group: str, article_index:
                                         st.session_state[attempt_key] += 1
                                         
                                         if answer == question["correct"]:
+                                            # Calculate points based on attempt number
+                                            if st.session_state[attempt_key] == 1:
+                                                points = 10  # Full points for first attempt
+                                                star_message = "⭐ **You earned a STAR!** ⭐"
+                                            else:
+                                                points = 5   # Half points for second attempt
+                                                star_message = "⭐ **You earned a STAR!** (Half points for retry) ⭐"
+                                            
                                             # Store feedback in session state for persistence
                                             feedback_key = f"feedback_{question_key}"
                                             st.session_state[feedback_key] = {
                                                 'type': 'correct',
                                                 'message': f"🎉 Correct! {question['explanation']}",
-                                                'reasoning': f"💡 **Why this is right:** {question['reasoning']}"
+                                                'reasoning': f"💡 **Why this is right:** {question['reasoning']}",
+                                                'star_message': star_message
                                             }
                                             
                                             st.session_state.answered_questions.add(question_key)
-                                            st.session_state.score += 10
+                                            st.session_state.score += points
                                             st.session_state.questions_answered += 1
                                             
                                             # Update kid progress if authenticated
                                             if hasattr(st.session_state, 'selected_kid') and hasattr(st.session_state, 'profile_manager'):
                                                 old_progress = st.session_state.profile_manager.get_kid_progress(st.session_state.selected_kid['kid_id'])
+                                                
+                                                # Check if this completes the article
+                                                article_id = article.get('id', f"article_{article_index}")
+                                                all_questions_answered = check_if_article_completed(article_index)
+                                                
                                                 st.session_state.profile_manager.update_kid_progress(
                                                     st.session_state.selected_kid['kid_id'], 
-                                                    score_increment=10, 
-                                                    questions_increment=1
+                                                    score_increment=points, 
+                                                    questions_increment=1,
+                                                    article_id=article_id if all_questions_answered else None
                                                 )
                                                 new_progress = st.session_state.profile_manager.get_kid_progress(st.session_state.selected_kid['kid_id'])
                                                 
@@ -624,15 +716,22 @@ def display_article_with_questions(article: Dict, age_group: str, article_index:
                                                 # Check if level up occurred
                                                 if new_progress.get('level', 1) > old_progress.get('level', 1):
                                                     st.success(f"🎯 **LEVEL UP!** You reached Level {new_progress.get('level', 1)}! 💎")
+                                                
+                                                # Check if article completed
+                                                if all_questions_answered:
+                                                    st.success(f"🎉 **ARTICLE COMPLETED!** You finished '{article['title']}'!")
+                                                    st.info("🔄 Refresh to see new articles!")
                                             
                                             st.balloons()
                                         else:
                                             feedback_key = f"feedback_{question_key}"
                                             if st.session_state[attempt_key] == 1:
-                                                # First wrong attempt - show hint
+                                                # First wrong attempt - show detailed explanation and hint
+                                                wrong_explanation = question.get('wrong_explanation', 'That answer is not correct.')
                                                 st.session_state[feedback_key] = {
                                                     'type': 'hint',
-                                                    'message': "❌ Not quite right. Let me give you a hint!",
+                                                    'message': "❌ Not quite right. Let me explain why:",
+                                                    'wrong_explanation': f"🔍 **Why this is wrong:** {wrong_explanation}",
                                                     'hint': f"💡 **Hint:** {question['hint']}",
                                                     'encouragement': "Try again! You can do it! 🌟"
                                                 }
@@ -647,14 +746,13 @@ def display_article_with_questions(article: Dict, age_group: str, article_index:
                                                 }
                                                 st.session_state.answered_questions.add(question_key)
                                                 st.session_state.questions_answered += 1
-                                                # Give partial credit for trying
-                                                st.session_state.score += 5
+                                                # No points for wrong answer after 2 attempts
                                                 
-                                                # Update kid progress if authenticated
+                                                # Update kid progress if authenticated (no points)
                                                 if hasattr(st.session_state, 'selected_kid') and hasattr(st.session_state, 'profile_manager'):
                                                     st.session_state.profile_manager.update_kid_progress(
                                                         st.session_state.selected_kid['kid_id'], 
-                                                        score_increment=5, 
+                                                        score_increment=0, 
                                                         questions_increment=1
                                                     )
                                         
@@ -672,8 +770,12 @@ def display_article_with_questions(article: Dict, age_group: str, article_index:
                                 if feedback['type'] == 'correct':
                                     st.success(feedback['message'])
                                     st.info(feedback['reasoning'])
+                                    if 'star_message' in feedback:
+                                        st.success(feedback['star_message'])
                                 elif feedback['type'] == 'hint':
                                     st.error(feedback['message'])
+                                    if 'wrong_explanation' in feedback:
+                                        st.warning(feedback['wrong_explanation'])
                                     st.info(feedback['hint'])
                                     st.info(feedback['encouragement'])
                                 elif feedback['type'] == 'final':
@@ -800,29 +902,36 @@ def main():
         # Load articles
         try:
             with st.spinner("Loading latest news articles..."):
-                articles = fetch_news_articles(category_filter, 3)
+                # Get completed articles for this kid
+                completed_articles = st.session_state.profile_manager.get_completed_articles(kid['kid_id'])
+                articles = fetch_news_articles(category_filter, 3, completed_articles)
             
             if not articles:
                 st.warning("No articles found. Using fallback content.")
                 articles = get_fallback_articles()
+                # Add IDs to fallback articles
+                for article in articles:
+                    if 'id' not in article:
+                        article['id'] = generate_article_id(article)
             
             # Initialize content adapter
             content_adapter = ContentAdapter()
             
-            # Display articles and track reading
+            # Display articles and track completion
             for i, article in enumerate(articles):
+                # Check if article is completed
+                article_id = article.get('id', generate_article_id(article))
+                is_completed = st.session_state.profile_manager.is_article_completed(kid['kid_id'], article_id)
+                
+                if is_completed:
+                    st.success(f"✅ Article '{article['title']}' completed!")
+                    continue
+                
                 # Adapt content for age group
                 adapted_article = content_adapter.adapt_content(article, age_group)
-                display_article_with_questions(adapted_article, age_group, i)
+                adapted_article['id'] = article_id
                 
-                # Track article reading (increment once per session per article)
-                article_read_key = f"read_{i}"
-                if article_read_key not in st.session_state:
-                    st.session_state[article_read_key] = True
-                    st.session_state.profile_manager.update_kid_progress(
-                        kid['kid_id'], 
-                        articles_increment=1
-                    )
+                display_article_with_questions(adapted_article, age_group, i)
                 
         except Exception as e:
             logger.error(f"Error loading articles: {e}")
