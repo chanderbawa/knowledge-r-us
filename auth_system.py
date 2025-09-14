@@ -594,5 +594,5 @@ def show_kid_dashboard(profile_manager: UserProfileManager, selected_kid: Dict):
     
     # Start learning button
     if st.button("🚀 Start Learning!", type="primary", use_container_width=True):
-        st.session_state.show_dashboard = False
+        st.session_state.learning_mode = True
         st.rerun()
