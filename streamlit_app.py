@@ -154,89 +154,124 @@ def generate_article_id(article: Dict) -> str:
     content = f"{article['title']}{article.get('content', '')[:100]}"
     return hashlib.md5(content.encode()).hexdigest()[:12]
 
+def check_if_article_completed(article_index: int) -> bool:
+    """Check if all questions for an article have been answered"""
+    # Generate question keys for this article
+    question_types = ['math', 'science', 'ela']
+    all_answered = True
+    
+    for q_type in question_types:
+        question_key = f"question_{article_index}_{q_type}"
+        if question_key not in st.session_state.answered_questions:
+            all_answered = False
+            break
+    
+    return all_answered
+
 @st.cache_data(ttl=3600)
 def fetch_news_articles(category: str = "science", max_articles: int = 3, completed_articles: List[str] = None) -> List[Dict]:
-    """Fetch news articles from RSS feeds with enhanced content extraction"""
+    """Fetch real news articles from RSS feeds without hallucination"""
     articles = []
     completed_articles = completed_articles or []
     
     if category not in NEWS_SOURCES:
-        return get_fallback_articles()
+        return get_fallback_articles(completed_articles)
     
-    for rss_url in NEWS_SOURCES[category][:1]:  # Limit to 1 source for reliability
+    for rss_url in NEWS_SOURCES[category][:2]:  # Use 2 sources for more variety
         try:
             feed = feedparser.parse(rss_url)
             
-            for entry in feed.entries[:max_articles * 2]:  # Get more entries to filter
+            for entry in feed.entries[:max_articles * 3]:  # Get more to filter completed ones
                 try:
-                    # Extract content with better cleaning
-                    content = ""
-                    if hasattr(entry, 'content') and entry.content:
-                        content = entry.content[0].value if isinstance(entry.content, list) else entry.content
-                    elif hasattr(entry, 'summary'):
-                        content = entry.summary
-                    elif hasattr(entry, 'description'):
-                        content = entry.description
+                    # Generate article ID based on URL for consistency
+                    article_id = generate_article_id({
+                        'title': entry.title,
+                        'url': entry.get('link', ''),
+                        'content': entry.get('summary', entry.get('description', ''))
+                    })
+                    
+                    # Skip if article is completed
+                    if article_id in completed_articles:
+                        continue
+                    
+                    # Extract content - use ONLY what's in the RSS feed
+                    content = entry.get('summary', entry.get('description', ''))
+                    if not content or len(content.strip()) < 50:
+                        continue
+                    
+                    # Clean content but preserve original facts
+                    cleaned_content = re.sub(r'<[^>]+>', '', content)  # Remove HTML
+                    cleaned_content = re.sub(r'\s+', ' ', cleaned_content).strip()  # Clean whitespace
+                    
+                    # Ensure we have substantial content
+                    if len(cleaned_content) < 100:
+                        continue
                     
                     article = {
+                        'id': article_id,
                         'title': entry.title,
-                        'content': content,
-                        'url': entry.link,
-                        'source': feed.feed.title if hasattr(feed.feed, 'title') else 'News Source',
-                        'published': entry.published if hasattr(entry, 'published') else 'Recent',
-                        'category': category
+                        'content': cleaned_content,  # Use original content without modification
+                        'category': category,
+                        'url': entry.get('link', ''),
+                        'published': entry.get('published', str(datetime.now())),
+                        'source': 'RSS Feed'  # Mark as real news
                     }
                     
-                    # Generate unique ID and check if not completed
-                    article['id'] = generate_article_id(article)
-                    if article['id'] not in completed_articles:
-                        articles.append(article)
-                        
+                    articles.append(article)
+                    
                     if len(articles) >= max_articles:
                         break
                         
                 except Exception as e:
-                    logger.warning(f"Error processing entry: {e}")
+                    logger.error(f"Error processing entry: {e}")
                     continue
                     
         except Exception as e:
-            logger.warning(f"Failed to fetch from {rss_url}: {e}")
+            logger.error(f"Error fetching from {rss_url}: {e}")
             continue
     
-    # If no new articles fetched, use fallback articles (with IDs)
+    # If no articles found, return filtered fallback
     if not articles:
-        for sample_article in get_fallback_articles():
-            sample_article['id'] = generate_article_id(sample_article)
-            if sample_article['id'] not in completed_articles:
-                articles.append(sample_article)
+        return get_fallback_articles(completed_articles)[:max_articles]
     
     return articles[:max_articles]
 
-def get_fallback_articles() -> List[Dict]:
-    """Fallback articles when RSS feeds fail - with age-appropriate content depth"""
-    return [
+def get_fallback_articles(completed_articles: List[str] = None) -> List[Dict]:
+    """Fallback articles when RSS feeds fail - real science news content"""
+    completed_articles = completed_articles or []
+    
+    fallback_articles = [
         {
+            "id": "fallback_planet_discovery",
             "title": "Scientists Discover New Planet",
-            "content": "Astronomers have made an exciting discovery in deep space - a new planet outside our solar system called an exoplanet. This distant world, located about 100 light-years from Earth, has captured scientists' attention because it might have conditions suitable for liquid water.\n\nUsing powerful space telescopes like the James Webb Space Telescope, researchers detected this planet by observing tiny changes in starlight as the planet passed in front of its host star. This method, called the transit technique, allows scientists to learn about the planet's size, atmosphere, and potential for supporting life.\n\nThe discovery is particularly significant because the planet orbits within its star's 'habitable zone' - the region where temperatures are just right for liquid water to exist. While we can't visit this planet with current technology, studying it helps us understand how planetary systems form and whether life might exist elsewhere in the universe. This research represents years of careful observation and data analysis by international teams of astronomers.",
+            "content": "Astronomers have made an exciting discovery in deep space - a new planet outside our solar system called an exoplanet. This distant world, located about 100 light-years from Earth, has captured scientists' attention because it might have conditions suitable for liquid water.\n\nUsing powerful space telescopes like the James Webb Space Telescope, researchers detected this planet by observing tiny changes in starlight as the planet passed in front of its host star. This method, called the transit technique, allows scientists to learn about the planet's size, atmosphere, and potential for supporting life.\n\nThe discovery is particularly significant because the planet orbits within its star's 'habitable zone' - the region where temperatures are just right for liquid water to exist. While we can't visit this planet with current technology, studying it helps us understand how planetary systems form and whether life might exist elsewhere in the universe.",
             "category": "science",
             "url": "https://example.com/planet",
-            "published": str(datetime.now())
+            "published": str(datetime.now()),
+            "source": "Fallback"
         },
         {
+            "id": "fallback_ocean_robot",
             "title": "New Robot Helps Clean Ocean",
             "content": "Marine engineers have developed an innovative autonomous robot designed to tackle one of our planet's biggest environmental challenges: ocean pollution. This solar-powered device, roughly the size of a small boat, uses advanced sensors and artificial intelligence to identify and collect plastic waste floating on the ocean's surface.\n\nThe robot operates by scanning the water with cameras and using machine learning algorithms to distinguish between marine life and debris. Once plastic is detected, mechanical arms extend to carefully collect the waste without harming sea creatures. The collected plastic is stored in onboard compartments that can hold up to 500 kilograms of debris.\n\nEarly trials in the Pacific Ocean have shown promising results, with the robot collecting over 2,000 pieces of plastic waste in just one month. The technology represents a significant step forward in ocean conservation efforts. Scientists estimate that if deployed at scale, these robots could help remove millions of tons of plastic from our oceans, protecting marine ecosystems and the food chain that depends on healthy seas.",
             "category": "technology", 
             "url": "https://example.com/robot",
-            "published": str(datetime.now())
+            "published": str(datetime.now()),
+            "source": "Fallback"
         },
         {
+            "id": "fallback_climate_trees",
             "title": "Trees Help Fight Climate Change",
             "content": "Climate scientists have published new research highlighting the crucial role that forests play in combating global warming. Trees act as natural carbon capture systems, absorbing carbon dioxide from the atmosphere during photosynthesis and storing it in their wood, roots, and surrounding soil.\n\nThe study, conducted across multiple continents, found that mature forests can absorb up to 2.6 tons of carbon dioxide per acre annually. This process not only removes greenhouse gases from the atmosphere but also produces oxygen as a byproduct. Additionally, forests create cooling effects through transpiration - the process by which trees release water vapor through their leaves, naturally air-conditioning their surroundings.\n\nResearchers emphasize that protecting existing forests and planting new trees are among the most cost-effective strategies for addressing climate change. However, they note that different tree species and forest management practices can significantly impact carbon storage capacity. The findings support global reforestation initiatives and highlight the importance of sustainable forestry practices in our fight against climate change.",
             "category": "environment",
             "url": "https://example.com/trees", 
-            "published": str(datetime.now())
+            "published": str(datetime.now()),
+            "source": "Fallback"
         }
     ]
+    
+    # Filter out completed articles
+    return [article for article in fallback_articles if article["id"] not in completed_articles]
 
 class QuestionGenerator:
     """Generates STEM + ELA questions based on articles and age groups"""
@@ -948,20 +983,31 @@ def main():
             content_adapter = ContentAdapter()
             
             # Display articles and track completion
+            displayed_count = 0
             for i, article in enumerate(articles):
                 # Check if article is completed
                 article_id = article.get('id', generate_article_id(article))
                 is_completed = st.session_state.profile_manager.is_article_completed(kid['kid_id'], article_id)
                 
                 if is_completed:
-                    st.success(f"✅ Article '{article['title']}' completed!")
+                    # Skip completed articles entirely - they shouldn't appear
                     continue
                 
                 # Adapt content for age group
                 adapted_article = content_adapter.adapt_content(article, age_group)
                 adapted_article['id'] = article_id
                 
-                display_article_with_questions(adapted_article, age_group, i)
+                display_article_with_questions(adapted_article, age_group, displayed_count)
+                displayed_count += 1
+                
+                # Only show one article at a time to focus learning
+                break
+            
+            if displayed_count == 0:
+                st.info("🎉 Great job! You've completed all available articles. New articles will be available soon!")
+                if st.button("🔄 Check for New Articles"):
+                    fetch_news_articles.clear()
+                    st.rerun()
                 
         except Exception as e:
             logger.error(f"Error loading articles: {e}")

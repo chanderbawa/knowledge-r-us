@@ -294,49 +294,97 @@ class StreamlitDataManager:
             print(f"Get kid progress error: {e}")
             return {}
     
-    def update_kid_progress(self, kid_id: str, **kwargs):
-        """Update progress for a specific kid using SQLite"""
+    def update_kid_progress(self, kid_id: str, score_increment: int = 0, questions_increment: int = 0, article_id: str = None):
+        """Update progress for a specific kid using SQLite with proper logic"""
         try:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             
             # Get current progress
             current_progress = self.get_kid_progress(kid_id)
+            if not current_progress:
+                # Initialize progress if it doesn't exist
+                cursor.execute('''
+                    INSERT INTO kid_progress (kid_id, last_activity)
+                    VALUES (?, ?)
+                ''', (kid_id, str(datetime.now())))
+                current_progress = self.get_kid_progress(kid_id)
             
-            # Update fields
-            for key, value in kwargs.items():
-                if key in current_progress:
-                    if key in ["completed_articles", "achievements"]:
-                        current_progress[key] = json.dumps(value) if isinstance(value, list) else value
-                    else:
-                        current_progress[key] = value
+            # Update basic stats
+            new_total_score = current_progress.get("total_score", 0) + score_increment
+            new_questions_answered = current_progress.get("questions_answered", 0) + questions_increment
+            
+            # Update stars and diamonds
+            new_stars = current_progress.get("stars", 0)
+            new_diamonds = current_progress.get("diamonds", 0)
+            
+            # Award stars for correct answers (10 points)
+            if score_increment == 10:
+                new_stars += 1
+            elif score_increment == 5:  # Half points
+                new_stars += 1
+                
+            # Award diamonds for exceptional performance
+            if new_total_score > 0 and new_total_score % 30 == 0:
+                new_diamonds += 1
+            
+            # Update level and level progress
+            new_level = max(1, min(10, (new_total_score // 100) + 1))
+            new_level_progress = new_total_score % 100
+            
+            # Update difficulty based on performance
+            new_correct_streak = current_progress.get("correct_streak", 0)
+            new_wrong_streak = current_progress.get("wrong_streak", 0)
+            new_difficulty_level = current_progress.get("difficulty_level", 1)
+            
+            if score_increment > 0:  # Correct answer
+                new_correct_streak += 1
+                new_wrong_streak = 0
+                # Increase difficulty after 3 correct answers in a row
+                if new_correct_streak >= 3 and new_difficulty_level < 3:
+                    new_difficulty_level += 1
+                    new_correct_streak = 0
+            elif score_increment == 0 and questions_increment > 0:  # Wrong answer
+                new_wrong_streak += 1
+                new_correct_streak = 0
+                # Decrease difficulty after 2 wrong answers in a row
+                if new_wrong_streak >= 2 and new_difficulty_level > 1:
+                    new_difficulty_level -= 1
+                    new_wrong_streak = 0
+            
+            # Handle article completion
+            completed_articles = current_progress.get("completed_articles", [])
+            if article_id and article_id not in completed_articles:
+                completed_articles.append(article_id)
+                # Award extra diamond for completing article
+                new_diamonds += 1
             
             # Update database
             cursor.execute('''
                 UPDATE kid_progress SET 
-                    total_score = ?, questions_answered = ?, articles_read = ?, stars = ?, diamonds = ?,
+                    total_score = ?, questions_answered = ?, stars = ?, diamonds = ?,
                     level = ?, level_progress = ?, difficulty_level = ?, correct_streak = ?, wrong_streak = ?,
-                    completed_articles = ?, achievements = ?, last_activity = ?
+                    completed_articles = ?, last_activity = ?
                 WHERE kid_id = ?
             ''', (
-                current_progress.get("total_score", 0),
-                current_progress.get("questions_answered", 0),
-                current_progress.get("articles_read", 0),
-                current_progress.get("stars", 0),
-                current_progress.get("diamonds", 0),
-                current_progress.get("level", 1),
-                current_progress.get("level_progress", 0),
-                current_progress.get("difficulty_level", 1),
-                current_progress.get("correct_streak", 0),
-                current_progress.get("wrong_streak", 0),
-                json.dumps(current_progress.get("completed_articles", [])) if isinstance(current_progress.get("completed_articles"), list) else current_progress.get("completed_articles", "[]"),
-                json.dumps(current_progress.get("achievements", [])) if isinstance(current_progress.get("achievements"), list) else current_progress.get("achievements", "[]"),
+                new_total_score,
+                new_questions_answered,
+                new_stars,
+                new_diamonds,
+                new_level,
+                new_level_progress,
+                new_difficulty_level,
+                new_correct_streak,
+                new_wrong_streak,
+                json.dumps(completed_articles),
                 str(datetime.now()),
                 kid_id
             ))
             
             conn.commit()
             conn.close()
+            
+            print(f"DEBUG: Updated progress for {kid_id}: score={new_total_score}, difficulty={new_difficulty_level}, completed_articles={len(completed_articles)}")
             
         except Exception as e:
             print(f"Update kid progress error: {e}")
