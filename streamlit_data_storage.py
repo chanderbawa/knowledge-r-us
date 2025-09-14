@@ -168,6 +168,32 @@ class StreamlitDataManager:
             print(f"Authentication error: {e}")
             return False
     
+    def get_all_users(self) -> List[Dict]:
+        """Get all users from SQLite"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            cursor.execute("SELECT username, email, name, created_date FROM users")
+            results = cursor.fetchall()
+            conn.close()
+            
+            users = []
+            for result in results:
+                users.append({
+                    "user_id": result[0],  # username as user_id for compatibility
+                    "username": result[0],
+                    "email": result[1],
+                    "name": result[2],
+                    "created_date": result[3]
+                })
+            
+            return users
+            
+        except Exception as e:
+            print(f"Get all users error: {e}")
+            return []
+
     def get_user_info(self, username: str) -> Optional[Dict]:
         """Get user information from SQLite"""
         try:
