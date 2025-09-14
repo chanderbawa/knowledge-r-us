@@ -364,7 +364,8 @@ def display_article_with_questions(article: Dict, age_group: str, article_index:
                 with st.expander("🔧 Debug Info"):
                     st.write("**Database Status:**")
                     profile_manager = st.session_state.profile_manager
-                    st.write(f"- Database exists: {profile_manager.db_path.exists()}")
+                    import os
+                    st.write(f"- Database exists: {os.path.exists(profile_manager.db_path)}")
                     st.write(f"- Database path: {profile_manager.db_path}")
                     
                     users = profile_manager.get_all_users()
