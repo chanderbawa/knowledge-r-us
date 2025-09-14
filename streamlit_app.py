@@ -358,7 +358,22 @@ def display_article_with_questions(article: Dict, age_group: str, article_index:
                 tab_questions.append(ela_questions)
             
             if tab_names:
-                tabs = st.tabs(tab_names)
+                # Initialize active tab for this article
+                active_tab_key = f"active_tab_article_{article_index}"
+                if active_tab_key not in st.session_state:
+                    st.session_state[active_tab_key] = 0
+                
+                # Create custom tab selector that preserves state
+                selected_tab = st.selectbox(
+                    "Select Subject:",
+                    options=list(range(len(tab_names))),
+                    format_func=lambda x: tab_names[x],
+                    index=st.session_state[active_tab_key],
+                    key=f"tab_selector_{article_index}"
+                )
+                
+                # Update active tab in session state
+                st.session_state[active_tab_key] = selected_tab
                 
                 # Show debug info
                 with st.expander("🔧 Debug Info"):
@@ -375,166 +390,165 @@ def display_article_with_questions(article: Dict, age_group: str, article_index:
                         kids = profile_manager.get_kid_profiles(user['user_id'])
                         st.write(f"  - {user['username']}: {len(kids)} kids")
                 
-                for tab_idx, (tab, questions_in_tab) in enumerate(zip(tabs, tab_questions)):
-                    with tab:
-                        for j, question in enumerate(questions_in_tab):
-                            # Use article ID instead of index to ensure unique keys across different articles
-                            article_id = article.get('id', f"article_{article_index}")
-                            question_key = f"q_{article_id}_{question['type']}_{j}"
-                            attempt_key = f"attempts_{question_key}"
-                            
-                            # Initialize attempt counter
-                            if attempt_key not in st.session_state:
-                                st.session_state[attempt_key] = 0
-                            
-                            # Show question with status indicator
-                            if question_key in st.session_state.answered_questions:
-                                st.write(f"**Question {j+1}:** ✅")
-                                st.write(question["question"])
-                            elif st.session_state[attempt_key] > 0:
-                                st.write(f"**Question {j+1}:** ❌")
-                                st.write(question["question"])
+                # Display questions for selected tab only
+                questions_in_tab = tab_questions[selected_tab]
+                st.markdown(f"### {tab_names[selected_tab]} Questions")
+                
+                for j, question in enumerate(questions_in_tab):
+                    # Use article ID instead of index to ensure unique keys across different articles
+                    article_id = article.get('id', f"article_{article_index}")
+                    question_key = f"q_{article_id}_{question['type']}_{j}"
+                    attempt_key = f"attempts_{question_key}"
+                    
+                    # Initialize attempt counter
+                    if attempt_key not in st.session_state:
+                        st.session_state[attempt_key] = 0
+                    
+                    # Show question with status indicator
+                    if question_key in st.session_state.answered_questions:
+                        st.write(f"**Question {j+1}:** ✅")
+                        st.write(question["question"])
+                    elif st.session_state[attempt_key] > 0:
+                        st.write(f"**Question {j+1}:** ❌")
+                        st.write(question["question"])
+                    else:
+                        st.write(f"**Question {j+1}:**")
+                        st.write(question["question"])
+                    
+                    # Only show interactive elements if question hasn't been answered correctly
+                    if question_key not in st.session_state.answered_questions:
+                        # Create radio button for answers
+                        answer = st.radio(
+                            "Choose your answer:",
+                            question["options"],
+                            key=question_key,
+                            index=None
+                        )
+                        
+                        # Check answer button
+                        if st.button(f"Check Answer", key=f"check_{question_key}"):
+                            if answer is None:
+                                st.warning("⚠️ Please select an answer first!")
                             else:
-                                st.write(f"**Question {j+1}:**")
-                                st.write(question["question"])
-                            
-                            # Only show interactive elements if question hasn't been answered correctly
-                            if question_key not in st.session_state.answered_questions:
-                                # Create radio button for answers
-                                answer = st.radio(
-                                    "Choose your answer:",
-                                    question["options"],
-                                    key=question_key,
-                                    index=None
-                                )
+                                st.session_state[attempt_key] += 1
                                 
-                                # Check answer button
-                                if st.button(f"Check Answer", key=f"check_{question_key}"):
-                                    if answer is None:
-                                        st.warning("⚠️ Please select an answer first!")
+                                if answer == question["correct"]:
+                                    # Calculate points based on attempt number
+                                    if st.session_state[attempt_key] == 1:
+                                        points = 10  # Full points for first attempt
+                                        star_message = "⭐ **You earned a STAR!** ⭐"
                                     else:
-                                        st.session_state[attempt_key] += 1
+                                        points = 5   # Half points for second attempt
+                                        star_message = "⭐ **You earned a STAR!** (Half points for retry) ⭐"
+                                    
+                                    # Store feedback in session state for persistence
+                                    feedback_key = f"feedback_{question_key}"
+                                    st.session_state[feedback_key] = {
+                                        'type': 'correct',
+                                        'message': f"🎉 Correct! {question['explanation']}",
+                                        'reasoning': f"💡 **Why this is right:** {question['reasoning']}",
+                                        'star_message': star_message
+                                    }
+                                    
+                                    st.session_state.answered_questions.add(question_key)
+                                    st.session_state.score += points
+                                    st.session_state.questions_answered += 1
+                                    
+                                    # Update kid progress if authenticated
+                                    if hasattr(st.session_state, 'selected_kid') and hasattr(st.session_state, 'profile_manager'):
+                                        old_progress = st.session_state.profile_manager.get_kid_progress(st.session_state.selected_kid['kid_id'])
                                         
-                                        if answer == question["correct"]:
-                                            # Calculate points based on attempt number
-                                            if st.session_state[attempt_key] == 1:
-                                                points = 10  # Full points for first attempt
-                                                star_message = "⭐ **You earned a STAR!** ⭐"
-                                            else:
-                                                points = 5   # Half points for second attempt
-                                                star_message = "⭐ **You earned a STAR!** (Half points for retry) ⭐"
-                                            
-                                            # Store feedback in session state for persistence
-                                            feedback_key = f"feedback_{question_key}"
-                                            st.session_state[feedback_key] = {
-                                                'type': 'correct',
-                                                'message': f"🎉 Correct! {question['explanation']}",
-                                                'reasoning': f"💡 **Why this is right:** {question['reasoning']}",
-                                                'star_message': star_message
-                                            }
-                                            
-                                            st.session_state.answered_questions.add(question_key)
-                                            st.session_state.score += points
-                                            st.session_state.questions_answered += 1
-                                            
-                                            # Update kid progress if authenticated
-                                            if hasattr(st.session_state, 'selected_kid') and hasattr(st.session_state, 'profile_manager'):
-                                                old_progress = st.session_state.profile_manager.get_kid_progress(st.session_state.selected_kid['kid_id'])
-                                                
-                                                # Check if this completes the article
-                                                article_id = article.get('id', f"article_{article_index}")
-                                                all_questions_answered = check_if_article_completed(article_id)
-                                                
-                                                st.session_state.profile_manager.update_kid_progress(
-                                                    st.session_state.selected_kid['kid_id'], 
-                                                    score_increment=points, 
-                                                    questions_increment=1,
-                                                    article_id=article_id if all_questions_answered else None
-                                                )
-                                                new_progress = st.session_state.profile_manager.get_kid_progress(st.session_state.selected_kid['kid_id'])
-                                                
-                                                # Check if diamond was earned
-                                                if new_progress.get('diamonds', 0) > old_progress.get('diamonds', 0):
-                                                    st.success("💎 **DIAMOND EARNED!** 💎 Amazing work!")
-                                                
-                                                # Check if level up occurred
-                                                if new_progress.get('level', 1) > old_progress.get('level', 1):
-                                                    st.success(f"🎯 **LEVEL UP!** You reached Level {new_progress.get('level', 1)}! 💎")
-                                                
-                                                # Check if article completed
-                                                if all_questions_answered:
-                                                    st.success(f"🎉 **ARTICLE COMPLETED!** You finished '{article['title']}'!")
-                                                    st.info("🔄 Refresh to see new articles!")
-                                            
-                                            st.balloons()
-                                        else:
-                                            feedback_key = f"feedback_{question_key}"
-                                            if st.session_state[attempt_key] == 1:
-                                                # First wrong attempt - show detailed explanation and hint
-                                                wrong_explanation = question.get('wrong_explanation', 'That answer is not correct.')
-                                                st.session_state[feedback_key] = {
-                                                    'type': 'hint',
-                                                    'message': "❌ Not quite right. Let me explain why:",
-                                                    'wrong_explanation': f"🔍 **Why this is wrong:** {wrong_explanation}",
-                                                    'hint': f"💡 **Hint:** {question['hint']}",
-                                                    'encouragement': "Try again! You can do it! 🌟"
-                                                }
-                                            else:
-                                                # Second attempt - show answer and explanation
-                                                st.session_state[feedback_key] = {
-                                                    'type': 'final',
-                                                    'message': "❌ That's still not right, but great effort!",
-                                                    'correct_answer': f"✅ **The correct answer is:** {question['correct']}",
-                                                    'explanation': f"📚 **Explanation:** {question['explanation']}",
-                                                    'reasoning': f"💡 **Why this is right:** {question['reasoning']}"
-                                                }
-                                                st.session_state.answered_questions.add(question_key)
-                                                st.session_state.questions_answered += 1
-                                                # No points for wrong answer after 2 attempts
-                                                
-                                                # Update kid progress if authenticated (no points)
-                                                if hasattr(st.session_state, 'selected_kid') and hasattr(st.session_state, 'profile_manager'):
-                                                    st.session_state.profile_manager.update_kid_progress(
-                                                        st.session_state.selected_kid['kid_id'], 
-                                                        score_increment=0, 
-                                                        questions_increment=1
-                                                    )
+                                        # Check if this completes the article
+                                        article_id = article.get('id', f"article_{article_index}")
+                                        all_questions_answered = check_if_article_completed(article_id)
                                         
-                                        # Rerun to update display
-                                        st.rerun()
-                            else:
-                                # Question already answered - show completion status
-                                st.success("✅ **Question completed!**")
-                            
-                            # Display persistent feedback
-                            feedback_key = f"feedback_{question_key}"
-                            if feedback_key in st.session_state:
-                                feedback = st.session_state[feedback_key]
-                                
-                                if feedback['type'] == 'correct':
-                                    st.success(feedback['message'])
-                                    st.info(feedback['reasoning'])
-                                    if 'star_message' in feedback:
-                                        st.success(feedback['star_message'])
-                                elif feedback['type'] == 'hint':
-                                    st.error(feedback['message'])
-                                    if 'wrong_explanation' in feedback:
-                                        st.warning(feedback['wrong_explanation'])
-                                    st.info(feedback['hint'])
-                                    st.info(feedback['encouragement'])
-                                elif feedback['type'] == 'final':
-                                    st.error(feedback['message'])
-                                    st.success(feedback['correct_answer'])
-                                    st.info(feedback['explanation'])
-                                    st.info(feedback['reasoning'])
-                            
-                            # Show attempt status
-                            if st.session_state[attempt_key] > 0 and question_key not in st.session_state.answered_questions:
-                                if st.session_state[attempt_key] == 1:
-                                    st.caption("💪 One more try! You've got this!")
-                            
-                            if j < len(questions_in_tab) - 1:  # Don't add divider after last question
-                                st.divider()
+                                        st.session_state.profile_manager.update_kid_progress(
+                                            st.session_state.selected_kid['kid_id'], 
+                                            score_increment=points, 
+                                            questions_increment=1,
+                                            article_id=article_id if all_questions_answered else None
+                                        )
+                                        new_progress = st.session_state.profile_manager.get_kid_progress(st.session_state.selected_kid['kid_id'])
+                                        
+                                        # Check if diamond was earned
+                                        if new_progress.get('diamonds', 0) > old_progress.get('diamonds', 0):
+                                            st.success("💎 **DIAMOND EARNED!** 💎 Amazing work!")
+                                        
+                                        # Check if level up occurred
+                                        if new_progress.get('level', 1) > old_progress.get('level', 1):
+                                            st.success(f"🎯 **LEVEL UP!** You reached Level {new_progress.get('level', 1)}! 💎")
+                                        
+                                        # Check if article completed
+                                        if all_questions_answered:
+                                            st.success(f"🎉 **ARTICLE COMPLETED!** You finished '{article['title']}'!")
+                                            st.info("🔄 Refresh to see new articles!")
+                                    
+                                    st.balloons()
+                                else:
+                                    feedback_key = f"feedback_{question_key}"
+                                    if st.session_state[attempt_key] == 1:
+                                        # First wrong attempt - show detailed explanation and hint
+                                        wrong_explanation = question.get('wrong_explanation', 'That answer is not correct.')
+                                        st.session_state[feedback_key] = {
+                                            'type': 'hint',
+                                            'message': "❌ Not quite right. Let me explain why:",
+                                            'wrong_explanation': f"🔍 **Why this is wrong:** {wrong_explanation}",
+                                            'hint': f"💡 **Hint:** {question['hint']}",
+                                            'encouragement': "Try again! You can do it! 🌟"
+                                        }
+                                    else:
+                                        # Second attempt - show answer and explanation
+                                        st.session_state[feedback_key] = {
+                                            'type': 'final',
+                                            'message': "❌ That's still not right, but great effort!",
+                                            'correct_answer': f"✅ **The correct answer is:** {question['correct']}",
+                                            'explanation': f"📚 **Explanation:** {question['explanation']}",
+                                            'reasoning': f"💡 **Why this is right:** {question['reasoning']}"
+                                        }
+                                        st.session_state.answered_questions.add(question_key)
+                                        st.session_state.questions_answered += 1
+                                        # No points for wrong answer after 2 attempts
+                                        
+                                        # Update kid progress if authenticated (no points)
+                                        if hasattr(st.session_state, 'selected_kid') and hasattr(st.session_state, 'profile_manager'):
+                                            st.session_state.profile_manager.update_kid_progress(
+                                                st.session_state.selected_kid['kid_id'], 
+                                                score_increment=0, 
+                                                questions_increment=1
+                                            )
+                    else:
+                        # Question already answered - show completion status
+                        st.success("✅ **Question completed!**")
+                    
+                    # Display persistent feedback
+                    feedback_key = f"feedback_{question_key}"
+                    if feedback_key in st.session_state:
+                        feedback = st.session_state[feedback_key]
+                        
+                        if feedback['type'] == 'correct':
+                            st.success(feedback['message'])
+                            st.info(feedback['reasoning'])
+                            if 'star_message' in feedback:
+                                st.success(feedback['star_message'])
+                        elif feedback['type'] == 'hint':
+                            st.error(feedback['message'])
+                            if 'wrong_explanation' in feedback:
+                                st.warning(feedback['wrong_explanation'])
+                            st.info(feedback['hint'])
+                            st.info(feedback['encouragement'])
+                        elif feedback['type'] == 'final':
+                            st.error(feedback['message'])
+                            st.success(feedback['correct_answer'])
+                            st.info(feedback['explanation'])
+                            st.info(feedback['reasoning'])
+                    
+                    # Show attempt status
+                    if st.session_state[attempt_key] > 0 and question_key not in st.session_state.answered_questions:
+                        if st.session_state[attempt_key] == 1:
+                            st.caption("💪 One more try! You've got this!")
+                    
+                    if j < len(questions_in_tab) - 1:  # Don't add divider after last question
+                        st.divider()
 
 def main():
     """Main application function"""
