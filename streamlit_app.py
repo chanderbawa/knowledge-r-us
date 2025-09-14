@@ -363,14 +363,15 @@ def display_article_with_questions(article: Dict, age_group: str, article_index:
                 # Show debug info
                 with st.expander("🔧 Debug Info"):
                     st.write("**Database Status:**")
-                    st.write(f"- Database exists: {data_manager.db_path.exists()}")
-                    st.write(f"- Database path: {data_manager.db_path}")
+                    profile_manager = st.session_state.profile_manager
+                    st.write(f"- Database exists: {profile_manager.db_path.exists()}")
+                    st.write(f"- Database path: {profile_manager.db_path}")
                     
-                    users = data_manager.get_all_users()
+                    users = profile_manager.get_all_users()
                     st.write(f"- Total users: {len(users)}")
                     
                     for user in users:
-                        kids = data_manager.get_kid_profiles(user['user_id'])
+                        kids = profile_manager.get_kid_profiles(user['user_id'])
                         st.write(f"  - {user['username']}: {len(kids)} kids")
                 
                 for tab_idx, (tab, questions_in_tab) in enumerate(zip(tabs, tab_questions)):
