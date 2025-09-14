@@ -191,7 +191,7 @@ class UserProfileManager:
     
     def update_kid_progress(self, kid_id: str, score_increment: int = 0, questions_increment: int = 0, article_id: str = None):
         """Update progress for a specific kid"""
-        progress = self.load_user_progress()
+        progress = self._load_json(self.progress_file)
         
         if kid_id not in progress:
             progress[kid_id] = {
@@ -237,7 +237,7 @@ class UserProfileManager:
         # Check for new achievements
         self._check_achievements(progress[kid_id])
         
-        self.save_user_progress(progress)
+        self._save_json(self.progress_file, progress)
     
     def _award_recognition(self, progress: Dict, score_increment: int, questions_increment: int):
         """Award stars and diamonds based on performance"""
@@ -292,14 +292,14 @@ class UserProfileManager:
     
     def get_difficulty_level(self, kid_id: str) -> int:
         """Get current difficulty level for a kid"""
-        progress = self.load_user_progress()
+        progress = self._load_json(self.progress_file)
         if kid_id not in progress:
             return 1
         return progress[kid_id].get('difficulty_level', 1)
     
     def mark_article_completed(self, kid_id: str, article_id: str):
         """Mark an article as completed for a kid"""
-        progress = self.load_user_progress()
+        progress = self._load_json(self.progress_file)
         
         if kid_id not in progress:
             return
@@ -310,11 +310,11 @@ class UserProfileManager:
         if article_id not in progress[kid_id]['completed_articles']:
             progress[kid_id]['completed_articles'].append(article_id)
             
-        self.save_user_progress(progress)
+        self._save_json(self.progress_file, progress)
     
     def is_article_completed(self, kid_id: str, article_id: str) -> bool:
         """Check if an article is completed by a kid"""
-        progress = self.load_user_progress()
+        progress = self._load_json(self.progress_file)
         
         if kid_id not in progress:
             return False
@@ -324,7 +324,7 @@ class UserProfileManager:
     
     def get_completed_articles(self, kid_id: str) -> List[str]:
         """Get list of completed articles for a kid"""
-        progress = self.load_user_progress()
+        progress = self._load_json(self.progress_file)
         
         if kid_id not in progress:
             return []
