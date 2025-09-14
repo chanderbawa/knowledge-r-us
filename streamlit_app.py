@@ -831,7 +831,7 @@ def main():
     
     # Kid dashboard flow
     if 'learning_mode' not in st.session_state:
-        show_kid_dashboard(st.session_state.profile_manager)
+        show_kid_dashboard(st.session_state.profile_manager, st.session_state.selected_kid)
         return
     
     # Main learning interface
