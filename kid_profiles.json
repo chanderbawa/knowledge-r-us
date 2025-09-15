@@ -12,5 +12,31 @@
       "created_date": "2025-09-13 21:57:42.898443",
       "avatar": "\ud83e\uddd1\u200d\ud83d\ude80"
     }
+  ],
+  "chander_bawa": [
+    {
+      "kid_id": "chander_bawa_aaravjeet_0",
+      "name": "Aaravjeet",
+      "age": 9,
+      "age_group": "9-11",
+      "interests": [
+        "technology",
+        "science"
+      ],
+      "created_date": "2025-09-14 16:47:55.972616",
+      "avatar": "\ud83d\udc66"
+    },
+    {
+      "kid_id": "chander_bawa_varnika_1",
+      "name": "Varnika",
+      "age": 13,
+      "age_group": "12-14",
+      "interests": [
+        "technology",
+        "science"
+      ],
+      "created_date": "2025-09-14 16:48:05.986815",
+      "avatar": "\ud83d\udc67"
+    }
   ]
 }

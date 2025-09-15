@@ -5,6 +5,12 @@
       "name": "Demo Parent",
       "password": "$2b$12$cp6RLAuMuBC0EynRvV40mu.3rnU6QCiWwK3V/xOPVyr/QwCX05pW.",
       "created_date": "2025-09-13 21:57:42.897714"
+    },
+    "chander_bawa": {
+      "email": "chander_bawa@example.com",
+      "name": "chander_bawa",
+      "password": "$2b$12$iCVocccgxV3zbq9m73lAneXHMVWQNofoMwWHb29seM0wN1Pb4CWHC",
+      "created_date": "2025-09-14 16:47:35.638483"
     }
   }
 }

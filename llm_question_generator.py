@@ -5,8 +5,11 @@ Uses local LLM with RAG to generate contextually relevant questions from news ar
 """
 
 import json
-import re
+import logging
+import random
 from typing import Dict, List, Optional
+import re
+from math_curriculum import MathCurriculumGenerator
 from datetime import datetime
 import streamlit as st
 
@@ -19,6 +22,7 @@ class LLMQuestionGenerator:
             2: "Medium", 
             3: "Hard"
         }
+        self.math_generator = MathCurriculumGenerator()
         
         # Age-specific teacher personas for question generation
         self.teacher_personas = {
@@ -53,24 +57,30 @@ class LLMQuestionGenerator:
         }
         
     def generate_questions(self, article: Dict, age_group: str, difficulty_level: int = 1) -> List[Dict]:
-        """Generate contextually relevant questions using LLM prompts"""
-        questions = []
-        
-        # Extract key information from article
-        article_context = self._extract_article_context(article)
-        
-        # Get teacher persona for this age group (default to 9-11 if not found)
-        persona = self.teacher_personas.get(age_group, self.teacher_personas["9-11"])
-        
-        # Generate different types of questions using LLM prompts
-        subjects = ["math", "science", "ela"]
-        for subject in subjects:
-            question = self._generate_llm_question(article_context, age_group, subject, difficulty_level, persona)
-            if question:
-                questions.append(question)
+        """Generate only Science and ELA questions from article content (math is separate)"""
+        try:
+            questions = []
             
-        return questions
-    
+            # Generate science and ELA questions from article content
+            science_q = self._generate_llm_question(article, age_group, "science", difficulty_level)
+            ela_q = self._generate_llm_question(article, age_group, "ela", difficulty_level)
+            
+            # Add valid questions to the list
+            if science_q:
+                questions.append(science_q)
+            if ela_q:
+                questions.append(ela_q)
+            
+            # If no questions generated, use fallback (science/ELA only)
+            if not questions:
+                questions = self._get_news_fallback_questions(age_group, difficulty_level)
+            
+            return questions
+            
+        except Exception as e:
+            logging.error(f"Error generating questions: {e}")
+            return self._get_news_fallback_questions(age_group, difficulty_level)
+
     def _extract_article_context(self, article: Dict) -> Dict:
         """Extract key context from article for question generation"""
         title = article.get("title", "")
@@ -392,3 +402,90 @@ Return ONLY a JSON object with this exact structure:
     def get_age_group_info(self, age_group: str) -> Dict:
         """Get information about a specific age group"""
         return self.teacher_personas.get(age_group, {})
+    
+    def _get_fallback_questions(self, age_group: str, difficulty_level: int) -> List[Dict]:
+        """Generate fallback questions when LLM generation fails"""
+        try:
+            questions = []
+            
+            # Get math questions from curriculum
+            math_questions = self.math_generator.generate_math_questions(age_group, difficulty_level)
+            if math_questions:
+                questions.extend(math_questions)
+            
+            # Add basic science and ELA fallback questions
+            complexity = self._get_complexity_level(age_group)
+            
+            # Science fallback
+            science_q = self._generate_fallback_science("General Science", complexity)
+            if science_q:
+                questions.append(science_q)
+            
+            # ELA fallback
+            ela_q = self._generate_fallback_ela("Reading Comprehension", complexity)
+            if ela_q:
+                questions.append(ela_q)
+            
+            return questions
+            
+        except Exception as e:
+            logging.error(f"Error generating fallback questions: {e}")
+            # Ultimate fallback - very basic questions
+            return [
+                {
+                    "type": "math",
+                    "question": "What is 2 + 3?",
+                    "options": ["4", "5", "6", "7"],
+                    "correct": "5",
+                    "explanation": "2 + 3 = 5",
+                    "reasoning": "When we add 2 and 3, we get 5.",
+                    "hint": "Count up from 2: 3, 4, 5.",
+                    "wrong_explanation": "Remember to add carefully."
+                }
+            ]
+    
+    def _get_news_fallback_questions(self, age_group: str, difficulty_level: int) -> List[Dict]:
+        """Generate fallback Science and ELA questions for news articles (no math)"""
+        try:
+            questions = []
+            
+            # Add basic science and ELA fallback questions
+            complexity = self._get_complexity_level(age_group)
+            
+            # Science fallback
+            science_q = self._generate_fallback_science("General Science", complexity)
+            if science_q:
+                questions.append(science_q)
+            
+            # ELA fallback
+            ela_q = self._generate_fallback_ela("Reading Comprehension", complexity)
+            if ela_q:
+                questions.append(ela_q)
+            
+            return questions
+            
+        except Exception as e:
+            logging.error(f"Error generating news fallback questions: {e}")
+            # Ultimate fallback - basic questions
+            return [
+                {
+                    "type": "science",
+                    "question": "What is the scientific method?",
+                    "options": ["A way to cook", "A way to investigate and learn", "A type of math", "A game"],
+                    "correct": "A way to investigate and learn",
+                    "explanation": "The scientific method helps us investigate and learn about the world.",
+                    "reasoning": "Scientists use systematic methods to study and understand nature.",
+                    "hint": "Think about how scientists discover new things.",
+                    "wrong_explanation": "The scientific method is about investigation and discovery."
+                },
+                {
+                    "type": "ela",
+                    "question": "What is the main purpose of a news article?",
+                    "options": ["To entertain", "To inform readers", "To sell products", "To tell jokes"],
+                    "correct": "To inform readers",
+                    "explanation": "News articles are written to inform readers about current events.",
+                    "reasoning": "The primary purpose of journalism is to inform the public.",
+                    "hint": "Think about why people read the news.",
+                    "wrong_explanation": "News articles primarily aim to inform, not entertain or sell."
+                }
+            ]

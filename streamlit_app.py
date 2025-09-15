@@ -335,19 +335,15 @@ def display_article_with_questions(article: Dict, age_group: str, article_index:
         
         if questions:
             st.subheader("🤔 Test Your Knowledge!")
+            st.info("🔬📚 **Science & ELA questions** are based on this news article content!")
             
-            # Organize questions by type
-            math_questions = [q for q in questions if q['type'] == 'math']
-            science_questions = [q for q in questions if q['type'] == 'science']
-            ela_questions = [q for q in questions if q['type'] == 'ela']
+            # Organize questions by type for tabs (only Science and ELA for news articles)
+            science_questions = [q for q in questions if q.get('type') == 'science']
+            ela_questions = [q for q in questions if q.get('type') == 'ela']
             
             # Create tabs for different question types
             tab_names = []
             tab_questions = []
-            
-            if math_questions:
-                tab_names.append("🔢 Math")
-                tab_questions.append(math_questions)
             
             if science_questions:
                 tab_names.append("🔬 Science")
@@ -364,12 +360,13 @@ def display_article_with_questions(article: Dict, age_group: str, article_index:
                     st.session_state[active_tab_key] = 0
                 
                 # Create custom tab selector that preserves state
+                article_id = article.get('id', f'article_{article_index}')
                 selected_tab = st.selectbox(
                     "Select Subject:",
                     options=list(range(len(tab_names))),
                     format_func=lambda x: tab_names[x],
                     index=st.session_state[active_tab_key],
-                    key=f"tab_selector_{article_index}"
+                    key=f"tab_selector_{article_id}_{article_index}"
                 )
                 
                 # Update active tab in session state
@@ -564,6 +561,10 @@ def main():
         from streamlit_data_storage import StreamlitDataManager
         st.session_state.profile_manager = StreamlitDataManager()
     
+    # Initialize answered questions set
+    if 'answered_questions' not in st.session_state:
+        st.session_state.answered_questions = set()
+    
     # Remove any old data manager references
     if 'data_manager' in st.session_state:
         del st.session_state.data_manager
@@ -594,53 +595,408 @@ def main():
             
             conn.close()
         except Exception as e:
-            st.sidebar.write(f"**DB Error:** {e}")
-        
-        # Show session state
-        st.sidebar.write("**Session State:**")
-        st.sidebar.write(f"Authenticated: {st.session_state.get('authenticated', False)}")
-        st.sidebar.write(f"Username: {st.session_state.get('username', 'None')}")
-        st.sidebar.write(f"Selected Kid: {st.session_state.get('selected_kid', {}).get('name', 'None')}")
+            st.sidebar.error(f"Database error: {e}")
     
-    # Initialize session state
-    if 'authenticated' not in st.session_state:
-        st.session_state.authenticated = False
-    if 'score' not in st.session_state:
-        st.session_state.score = 0
-    if 'questions_answered' not in st.session_state:
-        st.session_state.questions_answered = 0
-    if 'answered_questions' not in st.session_state:
-        st.session_state.answered_questions = set()
+    st.title("🌟 Knowledge R Us")
+    st.markdown("### 📚 Learn from Real News Stories & Master Math Skills!")
     
-    # Authentication flow
-    if not st.session_state.authenticated:
-        show_login_page(st.session_state.profile_manager)
+    # Authentication section
+    if not hasattr(st.session_state, 'authenticated') or not st.session_state.authenticated:
+        handle_authentication()
         return
     
-    # Profile selection flow
-    if 'selected_kid' not in st.session_state:
-        show_profile_selection(st.session_state.profile_manager)
+    # Kid selection for authenticated users
+    if not hasattr(st.session_state, 'selected_kid') or not st.session_state.selected_kid:
+        handle_kid_selection()
         return
     
-    # Kid dashboard flow
-    if 'learning_mode' not in st.session_state:
-        show_kid_dashboard(st.session_state.profile_manager, st.session_state.selected_kid)
+    # Display current kid info
+    display_kid_info()
+    
+    # Check if we should show dashboard
+    if st.session_state.get('show_dashboard', False):
+        display_dashboard()
         return
     
-    # Main learning interface
+    # Main navigation - separate sections for Math and News
+    st.markdown("---")
+    st.subheader("🎯 Choose Your Learning Adventure!")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if st.button("📰 News Articles\n(Science & ELA)", key="news_button", use_container_width=True):
+            st.session_state.learning_mode = "news"
+            st.rerun()
+    
+    with col2:
+        if st.button("🔢 Math Practice\n(Curriculum Based)", key="math_button", use_container_width=True):
+            st.session_state.learning_mode = "math"
+            st.rerun()
+    
+    # Display selected section
+    if st.session_state.get('learning_mode') == "math":
+        display_math_section()
+    elif st.session_state.get('learning_mode') == "news":
+        display_news_articles()
+    else:
+        # Default welcome screen
+        st.markdown("### 👆 Choose a learning section above to get started!")
+
+def display_math_section():
+    """Display dedicated math practice section"""
+    st.header("🔢 Math Practice")
+    st.info("📊 Practice grade-level math skills with curriculum-based questions!")
+    
+    # Get current kid info
     kid = st.session_state.selected_kid
     age_group = kid['age_group']
     
-    # Header with kid info
-    col1, col2 = st.columns([4, 1])
+    # Get difficulty level for authenticated users
+    difficulty_level = 1
+    if hasattr(st.session_state, 'selected_kid') and hasattr(st.session_state, 'profile_manager'):
+        difficulty_level = st.session_state.profile_manager.get_difficulty_level(st.session_state.selected_kid['kid_id'])
+    
+    st.markdown(f"**Current Level:** {difficulty_level} | **Age Group:** {age_group}")
+    
+    # Generate math questions
+    from math_curriculum import MathCurriculumGenerator
+    math_generator = MathCurriculumGenerator()
+    
+    # Generate multiple sets of questions
+    col1, col2 = st.columns(2)
+    
     with col1:
-        st.title(f"🌟 {kid['name']}'s Learning Adventure")
+        if st.button("🎲 Generate New Math Questions", key="generate_math"):
+            # Clear previous math questions
+            keys_to_remove = [key for key in st.session_state.keys() if key.startswith('math_q_')]
+            for key in keys_to_remove:
+                del st.session_state[key]
+            st.session_state.math_questions_generated = True
+            st.rerun()
+    
+    with col2:
+        if st.button("📊 View Math Progress", key="math_progress"):
+            st.info("Math progress tracking coming soon!")
+    
+    # Display math questions
+    if st.session_state.get('math_questions_generated', False):
+        math_questions = math_generator.generate_math_questions(age_group, difficulty_level)
+        
+        if math_questions:
+            st.subheader("🤔 Practice Problems")
+            
+            for i, question in enumerate(math_questions):
+                with st.container():
+                    st.markdown(f"**Problem {i+1}:**")
+                    question_key = f"math_q_{i}"
+                    attempt_key = f"math_attempts_{i}"
+                    
+                    # Initialize attempt counter
+                    if attempt_key not in st.session_state:
+                        st.session_state[attempt_key] = 0
+                    
+                    # Show question
+                    st.write(question["question"])
+                    
+                    # Only show interactive elements if question hasn't been answered correctly
+                    if question_key not in st.session_state.get('answered_math_questions', set()):
+                        # Create radio button for answers
+                        answer = st.radio(
+                            "Choose your answer:",
+                            question["options"],
+                            key=f"radio_{question_key}",
+                            index=None
+                        )
+                        
+                        # Check answer button
+                        if st.button(f"Check Answer", key=f"check_math_{i}"):
+                            if answer is None:
+                                st.warning("⚠️ Please select an answer first!")
+                            else:
+                                st.session_state[attempt_key] += 1
+                                
+                                if 'answered_math_questions' not in st.session_state:
+                                    st.session_state.answered_math_questions = set()
+                                
+                                if answer == question["correct"]:
+                                    # Correct answer
+                                    points = 10 if st.session_state[attempt_key] == 1 else 5
+                                    st.success(f"🎉 Correct! {question['explanation']}")
+                                    st.info(f"💡 **Why this is right:** {question['reasoning']}")
+                                    
+                                    st.session_state.answered_math_questions.add(question_key)
+                                    
+                                    # Update progress
+                                    if hasattr(st.session_state, 'selected_kid') and hasattr(st.session_state, 'profile_manager'):
+                                        st.session_state.profile_manager.update_kid_progress(
+                                            st.session_state.selected_kid['kid_id'], 
+                                            score_increment=points, 
+                                            questions_increment=1
+                                        )
+                                    
+                                    st.balloons()
+                                else:
+                                    # Wrong answer
+                                    if st.session_state[attempt_key] == 1:
+                                        st.error("❌ Not quite right. Let me explain why:")
+                                        st.warning(f"🔍 **Why this is wrong:** {question.get('wrong_explanation', 'That answer is not correct.')}")
+                                        st.info(f"💡 **Hint:** {question['hint']}")
+                                        st.info("Try again! You can do it! 🌟")
+                                    else:
+                                        st.error("❌ That's still not right, but great effort!")
+                                        st.success(f"✅ **The correct answer is:** {question['correct']}")
+                                        st.info(f"📚 **Explanation:** {question['explanation']}")
+                                        st.info(f"💡 **Why this is right:** {question['reasoning']}")
+                                        st.session_state.answered_math_questions.add(question_key)
+                                        
+                                        # Update progress (no points for wrong answer)
+                                        if hasattr(st.session_state, 'selected_kid') and hasattr(st.session_state, 'profile_manager'):
+                                            st.session_state.profile_manager.update_kid_progress(
+                                                st.session_state.selected_kid['kid_id'], 
+                                                score_increment=0, 
+                                                questions_increment=1
+                                            )
+                    else:
+                        st.success("✅ **Problem completed!**")
+                    
+                    if i < len(math_questions) - 1:
+                        st.divider()
+
+def handle_authentication():
+    """Handle user authentication"""
+    st.header("🔐 Welcome to Knowledge R Us!")
+    st.markdown("Please sign in or create an account to continue.")
+    
+    # Initialize auth system if not exists
+    if 'auth_system' not in st.session_state:
+        from auth_system import UserProfileManager
+        st.session_state.auth_system = UserProfileManager()
+    
+    auth_system = st.session_state.auth_system
+    
+    # Login/Register tabs
+    tab1, tab2 = st.tabs(["🔑 Login", "📝 Register"])
+    
+    with tab1:
+        st.subheader("Login")
+        username = st.text_input("Username", key="login_username")
+        password = st.text_input("Password", type="password", key="login_password")
+        
+        if st.button("Login", key="login_button"):
+            if username and password:
+                is_authenticated = auth_system.authenticate_user(username, password)
+                if is_authenticated:
+                    user_info = auth_system.get_user_info(username)
+                    if user_info:
+                        st.session_state.authenticated = True
+                        st.session_state.current_user = {'user_id': username, **user_info}
+                        st.success(f"Welcome back, {username}!")
+                        st.rerun()
+                    else:
+                        st.error("Error retrieving user information")
+                else:
+                    st.error("Invalid username or password")
+            else:
+                st.warning("Please enter both username and password")
+    
+    with tab2:
+        st.subheader("Create Account")
+        new_username = st.text_input("Choose Username", key="register_username")
+        new_password = st.text_input("Choose Password", type="password", key="register_password")
+        confirm_password = st.text_input("Confirm Password", type="password", key="confirm_password")
+        
+        if st.button("Create Account", key="register_button"):
+            if new_username and new_password and confirm_password:
+                if new_password == confirm_password:
+                    success = auth_system.register_parent(new_username, f"{new_username}@example.com", new_username, new_password)
+                    if success:
+                        st.success("Account created successfully! Please login.")
+                    else:
+                        st.error("Username already exists")
+                else:
+                    st.error("Passwords don't match")
+            else:
+                st.warning("Please fill in all fields")
+
+def handle_kid_selection():
+    """Handle kid profile selection"""
+    st.header("👶 Select Your Child's Profile")
+    
+    user = st.session_state.current_user
+    auth_system = st.session_state.auth_system
+    
+    # Get kid profiles
+    kids = auth_system.get_kid_profiles(user['user_id'])
+    
+    if not kids:
+        st.info("No child profiles found. Let's create one!")
+        create_kid_profile()
+    else:
+        st.subheader("Choose a profile:")
+        
+        # Display kid profiles
+        for kid in kids:
+            col1, col2 = st.columns([3, 1])
+            
+            with col1:
+                st.markdown(f"**{kid['name']}** {kid['avatar']}")
+                st.caption(f"Age {kid['age']} • Interests: {', '.join(kid['interests'])}")
+            
+            with col2:
+                if st.button("Select", key=f"select_{kid['kid_id']}"):
+                    st.session_state.selected_kid = kid
+                    st.success(f"Selected {kid['name']}!")
+                    st.rerun()
+        
+        st.divider()
+        st.subheader("Or create a new profile:")
+        create_kid_profile()
+
+def create_kid_profile():
+    """Create a new kid profile"""
+    with st.form("create_kid_profile"):
+        st.subheader("Create Child Profile")
+        
+        name = st.text_input("Child's Name")
+        age = st.number_input("Age", min_value=6, max_value=18, value=8)
+        
+        # Age group mapping
+        if 6 <= age <= 8:
+            age_group = "6-8"
+        elif 9 <= age <= 11:
+            age_group = "9-11"
+        elif 12 <= age <= 14:
+            age_group = "12-14"
+        else:
+            age_group = "15-18"
+        
+        avatar = st.selectbox("Choose Avatar", ["👦", "👧", "🧒", "👶", "🦸‍♂️", "🦸‍♀️", "🎓", "🌟"])
+        interests = st.multiselect("Interests", ["science", "technology", "environment", "space", "animals", "sports"])
+        
+        if st.form_submit_button("Create Profile"):
+            if name and interests:
+                auth_system = st.session_state.auth_system
+                user = st.session_state.current_user
+                
+                kid_data = {
+                    'name': name,
+                    'age': age,
+                    'age_group': age_group,
+                    'avatar': avatar,
+                    'interests': interests
+                }
+                
+                kid_id = auth_system.create_kid_profile(
+                    user['user_id'], 
+                    kid_data['name'], 
+                    kid_data['age'], 
+                    kid_data['interests'], 
+                    kid_data['avatar']
+                )
+                if kid_id:
+                    st.success(f"Profile created for {name}!")
+                    st.rerun()
+                else:
+                    st.error("Error creating profile")
+            else:
+                st.warning("Please fill in name and select at least one interest")
+
+def display_kid_info():
+    """Display current kid information"""
+    kid = st.session_state.selected_kid
+    
+    col1, col2 = st.columns([3, 1])
+    
+    with col1:
+        st.markdown(f"**Welcome back, {kid['name']}!** {kid['avatar']}")
         st.caption(f"Age {kid['age']} • Learning from real news!")
     
     with col2:
         if st.button("📊 Dashboard"):
-            del st.session_state.learning_mode
+            st.session_state.show_dashboard = True
+            if 'learning_mode' in st.session_state:
+                del st.session_state.learning_mode
             st.rerun()
+
+def display_dashboard():
+    """Display kid progress dashboard"""
+    kid = st.session_state.selected_kid
+    
+    # Header with back button
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        st.header(f"📊 {kid['name']}'s Dashboard {kid['avatar']}")
+    with col2:
+        if st.button("🔙 Back to Learning"):
+            st.session_state.show_dashboard = False
+            st.rerun()
+    
+    # Get progress data
+    profile_manager = st.session_state.profile_manager
+    progress = profile_manager.get_kid_progress(kid['kid_id'])
+    
+    if progress:
+        # Progress metrics
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric("📈 Total Score", progress.get('total_score', 0))
+        
+        with col2:
+            st.metric("❓ Questions Answered", progress.get('questions_answered', 0))
+        
+        with col3:
+            st.metric("⭐ Stars Earned", progress.get('stars', 0))
+        
+        with col4:
+            st.metric("💎 Diamonds", progress.get('diamonds', 0))
+        
+        # Level and difficulty info
+        st.markdown("---")
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.metric("🎯 Current Level", progress.get('level', 1))
+        
+        with col2:
+            st.metric("📊 Difficulty Level", progress.get('difficulty_level', 1))
+        
+        with col3:
+            streak = progress.get('correct_streak', 0)
+            st.metric("🔥 Correct Streak", streak)
+        
+        # Achievements
+        achievements = progress.get('achievements', [])
+        if achievements:
+            st.markdown("---")
+            st.subheader("🏆 Achievements")
+            for achievement in achievements:
+                st.success(f"🎉 {achievement}")
+        
+        # Completed articles
+        completed_articles = progress.get('completed_articles', [])
+        if completed_articles:
+            st.markdown("---")
+            st.subheader("📚 Completed Articles")
+            st.write(f"You've completed {len(completed_articles)} articles!")
+        
+        # Last activity
+        last_activity = progress.get('last_activity')
+        if last_activity:
+            st.markdown("---")
+            st.caption(f"Last activity: {last_activity}")
+    else:
+        st.info("Start learning to see your progress here!")
+        if st.button("🚀 Start Learning"):
+            st.session_state.show_dashboard = False
+            st.rerun()
+
+def display_news_articles():
+    """Display news articles with Science and ELA questions"""
+    # Get current kid info
+    kid = st.session_state.selected_kid
+    age_group = kid['age_group']
     
     # Sidebar for controls and progress
     with st.sidebar:
