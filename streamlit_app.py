@@ -361,19 +361,30 @@ def display_article_with_questions(article: Dict, age_group: str, article_index:
             ela_difficulty = st.session_state.profile_manager.get_difficulty_level(kid_id, 'ela')
         
         # Generate questions with subject-specific difficulty levels
-        all_questions = []
+        st.info("🧠 Generating personalized questions based on the article...")
         
-        # Generate science questions with science difficulty
-        science_questions_raw = question_generator.generate_questions(article, age_group, science_difficulty)
-        science_questions = [q for q in science_questions_raw if q.get('type') == 'science']
-        all_questions.extend(science_questions)
-        
-        # Generate ELA questions with ELA difficulty  
-        ela_questions_raw = question_generator.generate_questions(article, age_group, ela_difficulty)
-        ela_questions = [q for q in ela_questions_raw if q.get('type') == 'ela']
-        all_questions.extend(ela_questions)
-        
-        questions = all_questions
+        with st.spinner("Creating Science & ELA questions..."):
+            # Generate all questions at once (both science and ELA)
+            all_questions = question_generator.generate_questions(article, age_group, max(science_difficulty, ela_difficulty))
+            
+            # Filter questions by type and ensure we have both subjects
+            science_questions = [q for q in all_questions if q.get('type') == 'science']
+            ela_questions = [q for q in all_questions if q.get('type') == 'ela']
+            
+            # If we don't have questions for both subjects, generate fallback
+            if not science_questions or not ela_questions:
+                st.warning("⚠️ Some questions couldn't be generated from the article. Using educational fallbacks...")
+                fallback_questions = question_generator.llm_generator._get_news_fallback_questions(age_group, max(science_difficulty, ela_difficulty))
+                
+                if not science_questions:
+                    science_fallback = [q for q in fallback_questions if q.get('type') == 'science']
+                    science_questions.extend(science_fallback)
+                
+                if not ela_questions:
+                    ela_fallback = [q for q in fallback_questions if q.get('type') == 'ela']
+                    ela_questions.extend(ela_fallback)
+            
+            questions = science_questions + ela_questions
         
         if questions:
             st.subheader("🤔 Test Your Knowledge!")

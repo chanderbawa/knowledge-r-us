@@ -69,29 +69,42 @@ class LLMQuestionGenerator:
     def generate_questions(self, article: Dict, age_group: str, difficulty_level: int = 1) -> List[Dict]:
         """Generate diverse Science and ELA questions from article content (math is separate)"""
         try:
+            print(f"Starting question generation for article: {article.get('title', 'Unknown')}")
             questions = []
             
             # Generate multiple question types for variety
             for subject in ["science", "ela"]:
+                print(f"Generating {subject} questions...")
                 # Generate 2-3 questions per subject with different types
                 question_count = 2 if difficulty_level <= 2 else 3
                 
                 for i in range(question_count):
                     question_type = self._select_question_type(age_group, difficulty_level, i)
+                    print(f"Generating {subject} question {i+1} of type {question_type}")
                     question = self._generate_diverse_question(article, age_group, subject, difficulty_level, question_type)
                     
                     if question:
+                        print(f"Successfully generated {subject} question: {question.get('question', 'No question text')[:50]}...")
                         questions.append(question)
+                    else:
+                        print(f"Failed to generate {subject} question {i+1}")
+            
+            print(f"Generated {len(questions)} questions total")
             
             # If no questions generated, use fallback (science/ELA only)
             if not questions:
+                print("No questions generated, using fallback...")
                 questions = self._get_news_fallback_questions(age_group, difficulty_level)
+                print(f"Fallback generated {len(questions)} questions")
             
             return questions
             
         except Exception as e:
+            print(f"Exception in generate_questions: {e}")
             logging.error(f"Error generating questions: {e}")
-            return self._get_news_fallback_questions(age_group, difficulty_level)
+            fallback_questions = self._get_news_fallback_questions(age_group, difficulty_level)
+            print(f"Exception fallback generated {len(fallback_questions)} questions")
+            return fallback_questions
 
     def _extract_article_context(self, article: Dict) -> Dict:
         """Extract key context from article for question generation"""
@@ -194,7 +207,9 @@ Return ONLY a JSON object with this exact structure:
         
         # Fall back to simple contextual generation
         print(f"Using simplified fallback for {subject} question")
-        return self._generate_simple_fallback(context, age_group, subject, difficulty_level)
+        fallback_question = self._generate_simple_fallback(context, age_group, subject, difficulty_level)
+        print(f"Generated fallback question: {fallback_question.get('question', 'No question')}")
+        return fallback_question
     
     def _validate_question_format(self, question: Dict) -> bool:
         """Validate that LLM response has correct format"""
