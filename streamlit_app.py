@@ -1094,9 +1094,16 @@ def display_math_section():
     if st.session_state.get('math_questions_generated', False):
         # Get math-specific difficulty level
         math_difficulty = 1
-        if hasattr(st.session_state, 'selected_kid') and hasattr(st.session_state, 'profile_manager'):
-            kid_id = st.session_state.selected_kid['kid_id']
-            math_difficulty = st.session_state.profile_manager.get_difficulty_level(kid_id, 'math')
+        if (hasattr(st.session_state, 'selected_kid') and 
+            hasattr(st.session_state, 'profile_manager') and 
+            st.session_state.selected_kid is not None and 
+            st.session_state.profile_manager is not None):
+            try:
+                kid_id = st.session_state.selected_kid['kid_id']
+                math_difficulty = st.session_state.profile_manager.get_difficulty_level(kid_id, 'math')
+            except (KeyError, TypeError, AttributeError) as e:
+                st.warning(f"Could not load math difficulty level, using default (Level 1)")
+                math_difficulty = 1
         
         math_questions = math_generator.generate_math_questions(age_group, math_difficulty)
         
