@@ -417,9 +417,16 @@ class StreamlitDataManager:
         except Exception as e:
             print(f"Update kid progress error: {e}")
     
-    def get_difficulty_level(self, kid_id: str) -> int:
-        """Get current difficulty level for a kid"""
+    def get_difficulty_level(self, kid_id: str, subject: str = None) -> int:
+        """Get current difficulty level for a kid (subject-specific or general)"""
         progress = self.get_kid_progress(kid_id)
+        
+        # Return subject-specific difficulty if requested
+        if subject and 'subject_difficulty' in progress:
+            subject_diff = progress['subject_difficulty'].get(subject, {"level": 1})
+            return subject_diff.get('level', 1)
+        
+        # Return general difficulty level for backward compatibility
         return progress.get('difficulty_level', 1)
     
     def mark_article_completed(self, kid_id: str, article_id: str):
