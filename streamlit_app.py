@@ -169,18 +169,34 @@ def check_if_article_completed(article_index: int) -> bool:
 
 @st.cache_data(ttl=3600)
 def fetch_news_articles(category: str = "science", max_articles: int = 3, completed_articles: List[str] = None) -> List[Dict]:
-    """Fetch real news articles from RSS feeds without hallucination"""
+    """Fetch real news articles from RSS feeds with robust error handling"""
     articles = []
     completed_articles = completed_articles or []
     
     if category not in NEWS_SOURCES:
+        logger.warning(f"Category {category} not found in NEWS_SOURCES")
         return get_fallback_articles(completed_articles)
     
-    for rss_url in NEWS_SOURCES[category][:2]:  # Use 2 sources for more variety
+    # Try each RSS source with timeout and better error handling
+    for rss_url in NEWS_SOURCES[category]:
         try:
+            logger.info(f"Fetching from: {rss_url}")
+            
+            # Add timeout to prevent hanging
+            import urllib.request
+            import socket
+            socket.setdefaulttimeout(10)  # 10 second timeout
+            
             feed = feedparser.parse(rss_url)
             
-            for entry in feed.entries[:max_articles * 3]:  # Get more to filter completed ones
+            # Check if feed was parsed successfully
+            if not hasattr(feed, 'entries') or not feed.entries:
+                logger.warning(f"No entries found in feed: {rss_url}")
+                continue
+            
+            logger.info(f"Found {len(feed.entries)} entries in feed")
+            
+            for entry in feed.entries[:max_articles * 2]:  # Get more to filter completed ones
                 try:
                     # Generate article ID based on URL for consistency
                     article_id = generate_article_id({
@@ -202,8 +218,9 @@ def fetch_news_articles(category: str = "science", max_articles: int = 3, comple
                     cleaned_content = re.sub(r'<[^>]+>', '', content)  # Remove HTML
                     cleaned_content = re.sub(r'\s+', ' ', cleaned_content).strip()  # Clean whitespace
                     
-                    # Ensure we have substantial content
-                    if len(cleaned_content) < 100:
+                    # Ensure we have substantial content (be more lenient)
+                    if len(cleaned_content) < 50:
+                        logger.debug(f"Skipping article with short content: {len(cleaned_content)} chars")
                         continue
                     
                     article = {
@@ -229,8 +246,17 @@ def fetch_news_articles(category: str = "science", max_articles: int = 3, comple
             logger.error(f"Error fetching from {rss_url}: {e}")
             continue
     
-    # If no articles found, return filtered fallback
+    logger.info(f"Successfully fetched {len(articles)} articles")
+    
+    # If we don't have enough articles, use fallback
+    if len(articles) < max_articles:
+        logger.info(f"Need more articles, adding fallback content")
+        fallback_articles = get_fallback_articles(completed_articles)
+        articles.extend(fallback_articles[:max_articles - len(articles)])
+    
+    # Ensure we always return something
     if not articles:
+        logger.warning("No articles found, returning fallback only")
         return get_fallback_articles(completed_articles)[:max_articles]
     
     return articles[:max_articles]
@@ -326,12 +352,28 @@ def display_article_with_questions(article: Dict, age_group: str, article_index:
         # Generate and display questions with adaptive difficulty
         question_generator = QuestionGenerator()
         
-        # Get difficulty level for authenticated users
-        difficulty_level = 1
+        # Get subject-specific difficulty levels for authenticated users
+        science_difficulty = 1
+        ela_difficulty = 1
         if hasattr(st.session_state, 'selected_kid') and hasattr(st.session_state, 'profile_manager'):
-            difficulty_level = st.session_state.profile_manager.get_difficulty_level(st.session_state.selected_kid['kid_id'])
+            kid_id = st.session_state.selected_kid['kid_id']
+            science_difficulty = st.session_state.profile_manager.get_difficulty_level(kid_id, 'science')
+            ela_difficulty = st.session_state.profile_manager.get_difficulty_level(kid_id, 'ela')
         
-        questions = question_generator.generate_questions(article, age_group, difficulty_level)
+        # Generate questions with subject-specific difficulty levels
+        all_questions = []
+        
+        # Generate science questions with science difficulty
+        science_questions_raw = question_generator.generate_questions(article, age_group, science_difficulty)
+        science_questions = [q for q in science_questions_raw if q.get('type') == 'science']
+        all_questions.extend(science_questions)
+        
+        # Generate ELA questions with ELA difficulty  
+        ela_questions_raw = question_generator.generate_questions(article, age_group, ela_difficulty)
+        ela_questions = [q for q in ela_questions_raw if q.get('type') == 'ela']
+        all_questions.extend(ela_questions)
+        
+        questions = all_questions
         
         if questions:
             st.subheader("🤔 Test Your Knowledge!")
@@ -401,52 +443,211 @@ def display_article_with_questions(article: Dict, age_group: str, article_index:
                     if attempt_key not in st.session_state:
                         st.session_state[attempt_key] = 0
                     
-                    # Show question with status indicator
+                    # Display question with type-specific styling
+                    question_type = question.get('question_type', 'multiple_choice')
+                    type_emoji = {
+                        'multiple_choice': '🔤',
+                        'true_false': '✅❌',
+                        'fill_blank': '📝',
+                        'short_answer': '💭',
+                        'matching': '🔗',
+                        'ordering': '🔢'
+                    }.get(question_type, '❓')
+                    
+                    # Show question with status indicator and type
                     if question_key in st.session_state.answered_questions:
-                        st.write(f"**Question {j+1}:** ✅")
+                        st.write(f"**Question {j+1}:** ✅ {type_emoji}")
                         st.write(question["question"])
                     elif st.session_state[attempt_key] > 0:
-                        st.write(f"**Question {j+1}:** ❌")
+                        st.write(f"**Question {j+1}:** ❌ {type_emoji}")
                         st.write(question["question"])
                     else:
-                        st.write(f"**Question {j+1}:**")
+                        st.write(f"**Question {j+1}:** {type_emoji}")
                         st.write(question["question"])
                     
                     # Only show interactive elements if question hasn't been answered correctly
                     if question_key not in st.session_state.answered_questions:
-                        # Create radio button for answers
-                        answer = st.radio(
-                            "Choose your answer:",
-                            question["options"],
-                            key=question_key,
-                            index=None
-                        )
+                        # Initialize answer selection in session state
+                        answer_key = f"answer_{question_key}"
+                        if answer_key not in st.session_state:
+                            st.session_state[answer_key] = None
                         
-                        # Check answer button
-                        if st.button(f"Check Answer", key=f"check_{question_key}"):
-                            if answer is None:
-                                st.warning("⚠️ Please select an answer first!")
-                            else:
-                                st.session_state[attempt_key] += 1
+                        # Enhanced visual styling for answer options
+                        st.markdown("""
+                        <div style="background: linear-gradient(135deg, #E3F2FD, #F3E5F5); 
+                                    border-radius: 15px; padding: 20px; margin: 15px 0; 
+                                    border: 3px solid #FFE082; box-shadow: 0 6px 20px rgba(0,0,0,0.15);">
+                            <h3 style="color: #1976D2; margin-bottom: 15px; font-family: 'Comic Sans MS', cursive; 
+                                       text-align: center; font-size: 1.5em;">
+                                🤔 Choose Your Answer:
+                            </h3>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        
+                        # Display question type-specific interface with enhanced styling
+                        if question_type == 'true_false':
+                            # Enhanced True/False styling
+                            st.markdown("""
+                            <div style="background: linear-gradient(135deg, #C8E6C9, #A5D6A7); 
+                                        border-radius: 12px; padding: 15px; margin: 10px 0; text-align: center;">
+                                <h5 style="color: #2E7D32; margin: 0; font-family: 'Comic Sans MS', cursive;">
+                                    ✅❌ True or False?
+                                </h5>
+                            </div>
+                            """, unsafe_allow_html=True)
+                            
+                            # Create custom styled buttons for True/False
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                if st.button("✅ TRUE", key=f"true_{question_key}", 
+                                           use_container_width=True,
+                                           help="Click if the statement is TRUE"):
+                                    answer = "True"
+                                    st.session_state[answer_key] = answer
+                            with col2:
+                                if st.button("❌ FALSE", key=f"false_{question_key}", 
+                                           use_container_width=True,
+                                           help="Click if the statement is FALSE"):
+                                    answer = "False"
+                                    st.session_state[answer_key] = answer
+                            
+                            # Show selected answer
+                            if st.session_state.get(answer_key):
+                                st.success(f"You selected: **{st.session_state[answer_key]}**")
+                            answer = st.session_state.get(answer_key)
+                            
+                        elif question_type == 'fill_blank':
+                            # Enhanced fill-in-the-blank styling
+                            st.markdown("""
+                            <div style="background: linear-gradient(135deg, #FFF3E0, #FFE0B2); 
+                                        border-radius: 12px; padding: 15px; margin: 10px 0; text-align: center;">
+                                <h5 style="color: #F57C00; margin: 0; font-family: 'Comic Sans MS', cursive;">
+                                    📝 Fill in the blank:
+                                </h5>
+                            </div>
+                            """, unsafe_allow_html=True)
+                            
+                            # Enhanced selectbox with better styling
+                            answer = st.selectbox(
+                                "🎯 Choose the word that best fits:",
+                                question["options"],
+                                key=f"select_{question_key}",
+                                index=0,
+                                help="Select the word that makes the most sense in the sentence"
+                            )
+                            
+                        elif question_type == 'short_answer':
+                            # Enhanced short answer styling
+                            st.markdown("""
+                            <div style="background: linear-gradient(135deg, #E8F5E8, #C8E6C9); 
+                                        border-radius: 12px; padding: 15px; margin: 10px 0; text-align: center;">
+                                <h5 style="color: #388E3C; margin: 0; font-family: 'Comic Sans MS', cursive;">
+                                    💭 Short Answer:
+                                </h5>
+                            </div>
+                            """, unsafe_allow_html=True)
+                            
+                            answer = st.selectbox(
+                                "🎯 Choose the best answer:",
+                                question["options"],
+                                key=f"select_{question_key}",
+                                index=0,
+                                help="Pick the answer that best fits the question"
+                            )
+                            
+                        elif question_type == 'ordering':
+                            # Enhanced ordering styling
+                            st.markdown("""
+                            <div style="background: linear-gradient(135deg, #F3E5F5, #E1BEE7); 
+                                        border-radius: 12px; padding: 15px; margin: 10px 0; text-align: center;">
+                                <h5 style="color: #7B1FA2; margin: 0; font-family: 'Comic Sans MS', cursive;">
+                                    🔢 Put in the correct order:
+                                </h5>
+                            </div>
+                            """, unsafe_allow_html=True)
+                            
+                            # Enhanced radio buttons for ordering
+                            for i, option in enumerate(question["options"]):
+                                if st.button(f"📋 {option}", key=f"order_{question_key}_{i}", 
+                                           use_container_width=True,
+                                           help=f"Click to select this sequence"):
+                                    answer = option
+                                    st.session_state[answer_key] = answer
+                            
+                            # Show selected answer
+                            if st.session_state.get(answer_key):
+                                st.success(f"You selected: **{st.session_state[answer_key]}**")
+                            answer = st.session_state.get(answer_key)
+                            
+                        else:
+                            # Enhanced multiple choice styling
+                            st.markdown("""
+                            <div style="background: linear-gradient(135deg, #E3F2FD, #BBDEFB); 
+                                        border-radius: 12px; padding: 15px; margin: 10px 0; text-align: center;">
+                                <h5 style="color: #1976D2; margin: 0; font-family: 'Comic Sans MS', cursive;">
+                                    🔤 Multiple Choice:
+                                </h5>
+                            </div>
+                            """, unsafe_allow_html=True)
+                            
+                            # Create enhanced buttons for each option
+                            for i, option in enumerate(question["options"]):
+                                option_letters = ['A', 'B', 'C', 'D']
+                                letter = option_letters[i] if i < len(option_letters) else str(i+1)
                                 
-                                if answer == question["correct"]:
-                                    # Calculate points based on attempt number
-                                    if st.session_state[attempt_key] == 1:
-                                        points = 10  # Full points for first attempt
-                                        star_message = "⭐ **You earned a STAR!** ⭐"
-                                    else:
-                                        points = 5   # Half points for second attempt
-                                        star_message = "⭐ **You earned a STAR!** (Half points for retry) ⭐"
+                                if st.button(f"{letter}. {option}", key=f"choice_{question_key}_{i}", 
+                                           use_container_width=True,
+                                           help=f"Click to select option {letter}"):
+                                    answer = option
+                                    st.session_state[answer_key] = answer
+                            
+                            # Show selected answer
+                            if st.session_state.get(answer_key):
+                                st.success(f"You selected: **{st.session_state[answer_key]}**")
+                            answer = st.session_state.get(answer_key)
+                        
+                        # Store the selected answer
+                        if answer is not None:
+                            st.session_state[answer_key] = answer
+                        
+                        # Enhanced Check Answer button
+                        st.markdown("<br>", unsafe_allow_html=True)  # Add spacing
+                        
+                        col1, col2, col3 = st.columns([1, 2, 1])
+                        with col2:
+                            if st.button(f"🎯 Check My Answer!", key=f"check_{question_key}", 
+                                       use_container_width=True,
+                                       help="Click to see if your answer is correct!"):
+                                selected_answer = st.session_state.get(answer_key)
+                                if selected_answer is None:
+                                    st.error("⚠️ Please select an answer first!")
+                                else:
+                                    st.session_state[attempt_key] += 1
+                                
+                                if selected_answer == question["correct"]:
+                                    # Correct answer with celebration
+                                    points = 10 if st.session_state[attempt_key] == 1 else 5
                                     
-                                    # Store feedback in session state for persistence
-                                    feedback_key = f"feedback_{question_key}"
-                                    st.session_state[feedback_key] = {
-                                        'type': 'correct',
-                                        'message': f"🎉 Correct! {question['explanation']}",
-                                        'reasoning': f"💡 **Why this is right:** {question['reasoning']}",
+                                    # Fun celebration messages
+                                    celebration_messages = [
+                                        "🎉 Amazing! You're a superstar!",
+                                        "✨ Fantastic! You nailed it!",
+                                        "🎆 Incredible! You're on fire!",
+                                        "🌈 Wonderful! You're brilliant!",
+                                        "🚀 Outstanding! You rock!"
+                                    ]
+                                    import random
+                                    celebration = random.choice(celebration_messages)
+                                    
+                                    star_message = "⭐" * min(points // 2, 5)
+                                    feedback = {
+                                        'type': 'success',
+                                        'message': f"{celebration} {star_message}",
+                                        'points': f"+{points} points!",
+                                        'explanation': f"📚 **Why this is right:** {question['explanation']}",
                                         'star_message': star_message
                                     }
-                                    
+                                    st.session_state[feedback_key] = feedback
                                     st.session_state.answered_questions.add(question_key)
                                     st.session_state.score += points
                                     st.session_state.questions_answered += 1
@@ -482,37 +683,64 @@ def display_article_with_questions(article: Dict, age_group: str, article_index:
                                     
                                     st.balloons()
                                 else:
-                                    feedback_key = f"feedback_{question_key}"
-                                    if st.session_state[attempt_key] == 1:
+                                    # Wrong answer with encouraging feedback
+                                    st.session_state[attempt_key] += 1
+                                    
+                                    if st.session_state[attempt_key] >= 2:
+                                        # Show correct answer after 2 attempts with encouragement
+                                        encouraging_messages = [
+                                            "💪 Don't worry! Learning is all about trying!",
+                                            "🌟 Great effort! Now you know for next time!",
+                                            "😊 Nice try! Every mistake helps us learn!",
+                                            "🌈 Good attempt! You're getting smarter!"
+                                        ]
+                                        encouragement = random.choice(encouraging_messages)
+                                        
+                                        feedback = {
+                                            'type': 'info',
+                                            'message': f"{encouragement}",
+                                            'correct_answer': f"🎯 The correct answer is: **{question['correct']}**",
+                                            'explanation': f"📚 **Why this is right:** {question['explanation']}",
+                                            'reasoning': f"💡 **Remember this:** {question['reasoning']}"
+                                        }
+                                        st.session_state.answered_questions.add(question_key)
+                                        st.session_state.questions_answered += 1
+                                        # No points for wrong answer after 2 attempts
+                                        
+                                        # Update kid progress if authenticated (no points, subject-specific)
+                                        if hasattr(st.session_state, 'selected_kid') and hasattr(st.session_state, 'profile_manager'):
+                                            kid_id = st.session_state.selected_kid['kid_id']
+                                            question_subject = question.get('type', 'general')
+                                            
+                                            # Update subject-specific progress (wrong answer)
+                                            st.session_state.profile_manager.update_subject_progress(
+                                                kid_id, question_subject, False, 0
+                                            )
+                                            
+                                            # Also update general progress for backward compatibility
+                                            st.session_state.profile_manager.update_kid_progress(
+                                                kid_id, 
+                                                score_increment=0, 
+                                                questions_increment=1
+                                            )
+                                            
+                                            # Check for new achievements (even for wrong answers)
+                                            new_achievements = st.session_state.profile_manager.get_new_achievements(kid_id)
+                                            if new_achievements:
+                                                for achievement in new_achievements:
+                                                    st.success(f"🏆 **NEW BADGE EARNED!** {achievement}")
+                                                st.balloons()
+                                    else:
                                         # First wrong attempt - show detailed explanation and hint
                                         wrong_explanation = question.get('wrong_explanation', 'That answer is not correct.')
-                                        st.session_state[feedback_key] = {
+                                        feedback = {
                                             'type': 'hint',
                                             'message': "❌ Not quite right. Let me explain why:",
                                             'wrong_explanation': f"🔍 **Why this is wrong:** {wrong_explanation}",
                                             'hint': f"💡 **Hint:** {question['hint']}",
                                             'encouragement': "Try again! You can do it! 🌟"
                                         }
-                                    else:
-                                        # Second attempt - show answer and explanation
-                                        st.session_state[feedback_key] = {
-                                            'type': 'final',
-                                            'message': "❌ That's still not right, but great effort!",
-                                            'correct_answer': f"✅ **The correct answer is:** {question['correct']}",
-                                            'explanation': f"📚 **Explanation:** {question['explanation']}",
-                                            'reasoning': f"💡 **Why this is right:** {question['reasoning']}"
-                                        }
-                                        st.session_state.answered_questions.add(question_key)
-                                        st.session_state.questions_answered += 1
-                                        # No points for wrong answer after 2 attempts
-                                        
-                                        # Update kid progress if authenticated (no points)
-                                        if hasattr(st.session_state, 'selected_kid') and hasattr(st.session_state, 'profile_manager'):
-                                            st.session_state.profile_manager.update_kid_progress(
-                                                st.session_state.selected_kid['kid_id'], 
-                                                score_increment=0, 
-                                                questions_increment=1
-                                            )
+                                    st.session_state[feedback_key] = feedback
                     else:
                         # Question already answered - show completion status
                         st.success("✅ **Question completed!**")
@@ -522,39 +750,183 @@ def display_article_with_questions(article: Dict, age_group: str, article_index:
                     if feedback_key in st.session_state:
                         feedback = st.session_state[feedback_key]
                         
-                        if feedback['type'] == 'correct':
-                            st.success(feedback['message'])
-                            st.info(feedback['reasoning'])
-                            if 'star_message' in feedback:
-                                st.success(feedback['star_message'])
+                        if feedback['type'] == 'success':
+                            # Celebration for correct answers
+                            st.markdown(f"""
+                            <div style="text-align: center; padding: 20px; background: linear-gradient(45deg, #A8E6CF, #7FCDCD); border-radius: 20px; margin: 15px 0; animation: celebration 0.6s ease-in-out;">
+                                <h2 style="color: white; font-size: 2em; margin: 10px 0;">{feedback['message']}</h2>
+                                <h3 style="color: white; font-size: 1.5em;">{feedback['points']}</h3>
+                            </div>
+                            """, unsafe_allow_html=True)
+                            st.balloons()
+                            st.info(feedback['explanation'])
                         elif feedback['type'] == 'hint':
-                            st.error(feedback['message'])
-                            if 'wrong_explanation' in feedback:
-                                st.warning(feedback['wrong_explanation'])
-                            st.info(feedback['hint'])
-                            st.info(feedback['encouragement'])
-                        elif feedback['type'] == 'final':
-                            st.error(feedback['message'])
-                            st.success(feedback['correct_answer'])
+                            # Encouraging message for wrong answers
+                            st.markdown(f"""
+                            <div style="text-align: center; padding: 15px; background: linear-gradient(45deg, #FFE066, #FFB347); border-radius: 15px; margin: 10px 0;">
+                                <h3 style="color: white; font-size: 1.3em;">{feedback['message']}</h3>
+                            </div>
+                            """, unsafe_allow_html=True)
+                            if 'hint' in feedback:
+                                st.info(feedback['hint'])
+                        elif feedback['type'] == 'info':
+                            # Final answer reveal with encouragement
+                            st.markdown(f"""
+                            <div style="text-align: center; padding: 15px; background: linear-gradient(45deg, #87CEEB, #98FB98); border-radius: 15px; margin: 10px 0;">
+                                <h3 style="color: white; font-size: 1.3em;">{feedback['message']}</h3>
+                            </div>
+                            """, unsafe_allow_html=True)
+                            if 'correct_answer' in feedback:
+                                st.info(feedback['correct_answer'])
                             st.info(feedback['explanation'])
                             st.info(feedback['reasoning'])
                     
-                    # Show attempt status
+                    # Show fun attempt status
                     if st.session_state[attempt_key] > 0 and question_key not in st.session_state.answered_questions:
                         if st.session_state[attempt_key] == 1:
-                            st.caption("💪 One more try! You've got this!")
+                            st.markdown("""
+                            <div style="text-align: center; padding: 10px; background: rgba(255, 255, 255, 0.8); border-radius: 10px; margin: 5px 0;">
+                                <p style="color: #FF6B6B; font-weight: bold; margin: 0;">💪 One more try! You've got this, superstar! 🌟</p>
+                            </div>
+                            """, unsafe_allow_html=True)
                     
                     if j < len(questions_in_tab) - 1:  # Don't add divider after last question
                         st.divider()
 
+def add_kid_friendly_styles():
+    """Add kid-friendly CSS styles"""
+    st.markdown("""
+    <style>
+    /* Main app styling */
+    .main .block-container {
+        padding-top: 2rem;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 20px;
+        margin: 10px;
+    }
+    
+    /* Headers with fun fonts */
+    h1, h2, h3 {
+        font-family: 'Comic Sans MS', cursive, sans-serif !important;
+        color: #2E86AB !important;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    /* Colorful buttons */
+    .stButton > button {
+        background: linear-gradient(45deg, #FF6B6B, #4ECDC4) !important;
+        color: white !important;
+        border: none !important;
+        border-radius: 25px !important;
+        font-size: 18px !important;
+        font-weight: bold !important;
+        padding: 15px 30px !important;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.2) !important;
+        transition: all 0.3s ease !important;
+        font-family: 'Comic Sans MS', cursive, sans-serif !important;
+    }
+    
+    .stButton > button:hover {
+        transform: translateY(-3px) !important;
+        box-shadow: 0 6px 20px rgba(0,0,0,0.3) !important;
+        background: linear-gradient(45deg, #FF8E8E, #6EEEE4) !important;
+    }
+    
+    /* Fun metrics styling */
+    .metric-container {
+        background: linear-gradient(135deg, #FFE066, #FF6B6B);
+        border-radius: 20px;
+        padding: 20px;
+        text-align: center;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        margin: 10px;
+    }
+    
+    /* Colorful selectbox */
+    .stSelectbox > div > div {
+        background: linear-gradient(45deg, #A8E6CF, #88D8C0) !important;
+        border-radius: 15px !important;
+        border: 3px solid #4ECDC4 !important;
+    }
+    
+    /* Fun radio buttons */
+    .stRadio > div {
+        background: rgba(255, 255, 255, 0.9);
+        border-radius: 15px;
+        padding: 15px;
+        border: 3px solid #FFE066;
+    }
+    
+    /* Animated success messages */
+    .stSuccess {
+        background: linear-gradient(45deg, #A8E6CF, #7FCDCD) !important;
+        border-radius: 15px !important;
+        animation: bounce 0.5s ease-in-out !important;
+    }
+    
+    @keyframes bounce {
+        0%, 20%, 60%, 100% { transform: translateY(0); }
+        40% { transform: translateY(-10px); }
+        80% { transform: translateY(-5px); }
+    }
+    
+    /* Fun error messages */
+    .stError {
+        background: linear-gradient(45deg, #FFB6C1, #FFA07A) !important;
+        border-radius: 15px !important;
+    }
+    
+    /* Colorful info boxes */
+    .stInfo {
+        background: linear-gradient(45deg, #87CEEB, #98FB98) !important;
+        border-radius: 15px !important;
+        border-left: 5px solid #4ECDC4 !important;
+    }
+    
+    /* Fun sidebar */
+    .css-1d391kg {
+        background: linear-gradient(180deg, #FFE066, #FF6B6B) !important;
+    }
+    
+    /* Animated progress indicators */
+    .progress-star {
+        animation: twinkle 1s ease-in-out infinite alternate;
+    }
+    
+    @keyframes twinkle {
+        from { opacity: 0.5; transform: scale(1); }
+        to { opacity: 1; transform: scale(1.1); }
+    }
+    
+    /* Fun text styling */
+    .big-emoji {
+        font-size: 3em;
+        animation: bounce 2s ease-in-out infinite;
+    }
+    
+    .celebration {
+        animation: celebration 0.6s ease-in-out;
+    }
+    
+    @keyframes celebration {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.2) rotate(5deg); }
+        100% { transform: scale(1); }
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
 def main():
     """Main application function"""
     st.set_page_config(
-        page_title="Knowledge R Us",
-        page_icon="🌟",
+        page_title="🌟 Knowledge R Us - Fun Learning!",
+        page_icon="🎮",
         layout="wide",
         initial_sidebar_state="expanded"
     )
+    
+    # Add kid-friendly styles
+    add_kid_friendly_styles()
     
     # Initialize data manager with SQLite persistence ONLY
     if 'profile_manager' not in st.session_state:
@@ -597,8 +969,14 @@ def main():
         except Exception as e:
             st.sidebar.error(f"Database error: {e}")
     
-    st.title("🌟 Knowledge R Us")
-    st.markdown("### 📚 Learn from Real News Stories & Master Math Skills!")
+    # Fun animated title
+    st.markdown("""
+    <div style="text-align: center; padding: 20px;">
+        <h1 style="font-size: 4em; margin: 0;">🌟 Knowledge R Us 🌟</h1>
+        <h2 style="font-size: 2em; color: #FF6B6B; margin: 10px 0;">🎮 Fun Learning Adventure! 🚀</h2>
+        <p style="font-size: 1.5em; color: #4ECDC4; font-weight: bold;">📚 Discover Amazing Stories & Master Cool Math! 🧮</p>
+    </div>
+    """, unsafe_allow_html=True)
     
     # Authentication section
     if not hasattr(st.session_state, 'authenticated') or not st.session_state.authenticated:
@@ -618,20 +996,40 @@ def main():
         display_dashboard()
         return
     
-    # Main navigation - separate sections for Math and News
-    st.markdown("---")
-    st.subheader("🎯 Choose Your Learning Adventure!")
+    # Fun animated navigation
+    st.markdown("""
+    <div style="text-align: center; padding: 30px; background: rgba(255,255,255,0.1); border-radius: 25px; margin: 20px 0;">
+        <h2 style="color: #FF6B6B; font-size: 2.5em; margin-bottom: 20px;">🎯 Choose Your Super Learning Adventure! 🎯</h2>
+        <p style="font-size: 1.3em; color: #4ECDC4;">Pick your favorite way to learn and have fun! 🌈</p>
+    </div>
+    """, unsafe_allow_html=True)
     
-    col1, col2 = st.columns(2)
+    col1, col2 = st.columns(2, gap="large")
     
     with col1:
-        if st.button("📰 News Articles\n(Science & ELA)", key="news_button", use_container_width=True):
+        st.markdown("""
+        <div style="text-align: center; padding: 20px; background: linear-gradient(135deg, #FFE066, #FF6B6B); border-radius: 25px; margin: 10px;">
+            <div class="big-emoji">📰</div>
+            <h3 style="color: white; margin: 15px 0;">News Stories!</h3>
+            <p style="color: white; font-size: 1.1em;">🔬 Cool Science & 📚 Fun Reading!</p>
+        </div>
+        """, unsafe_allow_html=True)
+        if st.button("🚀 Explore News Stories!", key="news_button", use_container_width=True):
             st.session_state.learning_mode = "news"
+            st.balloons()
             st.rerun()
     
     with col2:
-        if st.button("🔢 Math Practice\n(Curriculum Based)", key="math_button", use_container_width=True):
+        st.markdown("""
+        <div style="text-align: center; padding: 20px; background: linear-gradient(135deg, #4ECDC4, #44A08D); border-radius: 25px; margin: 10px;">
+            <div class="big-emoji">🔢</div>
+            <h3 style="color: white; margin: 15px 0;">Math Magic!</h3>
+            <p style="color: white; font-size: 1.1em;">🧮 Numbers & 🎯 Problem Solving!</p>
+        </div>
+        """, unsafe_allow_html=True)
+        if st.button("✨ Practice Math Magic!", key="math_button", use_container_width=True):
             st.session_state.learning_mode = "math"
+            st.balloons()
             st.rerun()
     
     # Display selected section
@@ -640,13 +1038,26 @@ def main():
     elif st.session_state.get('learning_mode') == "news":
         display_news_articles()
     else:
-        # Default welcome screen
-        st.markdown("### 👆 Choose a learning section above to get started!")
+        # Fun welcome screen with animations
+        st.markdown("""
+        <div style="text-align: center; padding: 40px; background: linear-gradient(135deg, #667eea, #764ba2); border-radius: 25px; margin: 30px 0;">
+            <div style="font-size: 4em; margin: 20px 0;">🎉</div>
+            <h2 style="color: white; font-size: 2.5em;">Welcome to Your Learning Adventure!</h2>
+            <p style="color: white; font-size: 1.5em; margin: 20px 0;">👆 Pick a super fun section above to start learning! 🌟</p>
+            <div style="font-size: 2em; margin: 20px 0;">🚀 📚 🧮 🎮</div>
+        </div>
+        """, unsafe_allow_html=True)
 
 def display_math_section():
     """Display dedicated math practice section"""
-    st.header("🔢 Math Practice")
-    st.info("📊 Practice grade-level math skills with curriculum-based questions!")
+    # Fun math header
+    st.markdown("""
+    <div style="text-align: center; padding: 25px; background: linear-gradient(135deg, #4ECDC4, #44A08D); border-radius: 25px; margin: 20px 0;">
+        <div style="font-size: 4em; margin: 10px 0;">🧮</div>
+        <h1 style="color: white; font-size: 3em; margin: 10px 0;">Math Magic Time!</h1>
+        <p style="color: white; font-size: 1.3em;">✨ Let's solve some awesome math problems! ✨</p>
+    </div>
+    """, unsafe_allow_html=True)
     
     # Get current kid info
     kid = st.session_state.selected_kid
@@ -681,7 +1092,13 @@ def display_math_section():
     
     # Display math questions
     if st.session_state.get('math_questions_generated', False):
-        math_questions = math_generator.generate_math_questions(age_group, difficulty_level)
+        # Get math-specific difficulty level
+        math_difficulty = 1
+        if hasattr(st.session_state, 'selected_kid') and hasattr(st.session_state, 'profile_manager'):
+            kid_id = st.session_state.selected_kid['kid_id']
+            math_difficulty = st.session_state.profile_manager.get_difficulty_level(kid_id, 'math')
+        
+        math_questions = math_generator.generate_math_questions(age_group, math_difficulty)
         
         if math_questions:
             st.subheader("🤔 Practice Problems")
@@ -724,16 +1141,33 @@ def display_math_section():
                                     points = 10 if st.session_state[attempt_key] == 1 else 5
                                     st.success(f"🎉 Correct! {question['explanation']}")
                                     st.info(f"💡 **Why this is right:** {question['reasoning']}")
+                                    feedback = "Correct!"
+                                    st.session_state[feedback_key] = feedback
+                                    st.session_state.answered_questions.add(question_key)
+                                    st.session_state.score += points
                                     
-                                    st.session_state.answered_math_questions.add(question_key)
-                                    
-                                    # Update progress
+                                    # Update progress for authenticated users (math-specific)
                                     if hasattr(st.session_state, 'selected_kid') and hasattr(st.session_state, 'profile_manager'):
+                                        kid_id = st.session_state.selected_kid['kid_id']
+                                        
+                                        # Update math-specific progress
+                                        st.session_state.profile_manager.update_subject_progress(
+                                            kid_id, 'math', True, points
+                                        )
+                                        
+                                        # Also update general progress for backward compatibility
                                         st.session_state.profile_manager.update_kid_progress(
-                                            st.session_state.selected_kid['kid_id'], 
+                                            kid_id, 
                                             score_increment=points, 
                                             questions_increment=1
                                         )
+                                        
+                                        # Check for new achievements
+                                        new_achievements = st.session_state.profile_manager.get_new_achievements(kid_id)
+                                        if new_achievements:
+                                            for achievement in new_achievements:
+                                                st.success(f"🏆 **NEW BADGE EARNED!** {achievement}")
+                                            st.balloons()
                                     
                                     st.balloons()
                                 else:
@@ -923,13 +1357,21 @@ def display_dashboard():
     """Display kid progress dashboard"""
     kid = st.session_state.selected_kid
     
-    # Header with back button
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        st.header(f"📊 {kid['name']}'s Dashboard {kid['avatar']}")
+    # Fun dashboard header
+    st.markdown(f"""
+    <div style="text-align: center; padding: 30px; background: linear-gradient(135deg, #FFE066, #FF6B6B); border-radius: 25px; margin: 20px 0;">
+        <div style="font-size: 4em; margin: 10px 0;">{kid['avatar']}</div>
+        <h1 style="color: white; font-size: 3em; margin: 10px 0;">{kid['name']}'s Super Dashboard!</h1>
+        <p style="color: white; font-size: 1.3em;">🌟 Look at all your amazing progress! 🌟</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Back button
+    col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        if st.button("🔙 Back to Learning"):
+        if st.button("🔙 Back to Learning Adventure!", use_container_width=True):
             st.session_state.show_dashboard = False
+            st.balloons()
             st.rerun()
     
     # Get progress data
@@ -937,42 +1379,105 @@ def display_dashboard():
     progress = profile_manager.get_kid_progress(kid['kid_id'])
     
     if progress:
-        # Progress metrics
+        # Fun progress metrics with colorful cards
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
-            st.metric("📈 Total Score", progress.get('total_score', 0))
+            st.markdown(f"""
+            <div style="text-align: center; padding: 20px; background: linear-gradient(135deg, #FF6B6B, #FF8E8E); border-radius: 20px; margin: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
+                <div style="font-size: 2.5em;">📈</div>
+                <h3 style="color: white; margin: 10px 0;">Total Score</h3>
+                <h2 style="color: white; font-size: 2.5em; margin: 5px 0;">{progress.get('total_score', 0)}</h2>
+                <p style="color: white;">Points Earned!</p>
+            </div>
+            """, unsafe_allow_html=True)
         
         with col2:
-            st.metric("❓ Questions Answered", progress.get('questions_answered', 0))
+            st.markdown(f"""
+            <div style="text-align: center; padding: 20px; background: linear-gradient(135deg, #4ECDC4, #6EEEE4); border-radius: 20px; margin: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
+                <div style="font-size: 2.5em;">❓</div>
+                <h3 style="color: white; margin: 10px 0;">Questions</h3>
+                <h2 style="color: white; font-size: 2.5em; margin: 5px 0;">{progress.get('questions_answered', 0)}</h2>
+                <p style="color: white;">Answered!</p>
+            </div>
+            """, unsafe_allow_html=True)
         
         with col3:
-            st.metric("⭐ Stars Earned", progress.get('stars', 0))
+            st.markdown(f"""
+            <div style="text-align: center; padding: 20px; background: linear-gradient(135deg, #FFE066, #FFE88A); border-radius: 20px; margin: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
+                <div style="font-size: 2.5em; animation: twinkle 1s ease-in-out infinite alternate;">⭐</div>
+                <h3 style="color: #FF6B6B; margin: 10px 0;">Stars</h3>
+                <h2 style="color: #FF6B6B; font-size: 2.5em; margin: 5px 0;">{stars}</h2>
+                <p style="color: #FF6B6B;">Collected!</p>
+            </div>
+            """, unsafe_allow_html=True)
         
         with col4:
-            st.metric("💎 Diamonds", progress.get('diamonds', 0))
+            diamonds = progress.get('diamonds', 0)
+            st.markdown(f"""
+            <div style="text-align: center; padding: 20px; background: linear-gradient(135deg, #A8E6CF, #7FCDCD); border-radius: 20px; margin: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
+                <div style="font-size: 2.5em; animation: twinkle 1s ease-in-out infinite alternate;">💎</div>
+                <h3 style="color: white; margin: 10px 0;">Diamonds</h3>
+                <h2 style="color: white; font-size: 2.5em; margin: 5px 0;">{diamonds}</h2>
+                <p style="color: white;">Earned!</p>
+            </div>
+            """, unsafe_allow_html=True)
         
-        # Level and difficulty info
-        st.markdown("---")
+        # Level and difficulty info with fun styling
+        st.markdown("<br>", unsafe_allow_html=True)
         col1, col2, col3 = st.columns(3)
         
         with col1:
-            st.metric("🎯 Current Level", progress.get('level', 1))
+            level = progress.get('level', 1)
+            st.markdown(f"""
+            <div style="text-align: center; padding: 25px; background: linear-gradient(135deg, #667eea, #764ba2); border-radius: 20px; margin: 10px;">
+                <div style="font-size: 3em;">🎯</div>
+                <h3 style="color: white; margin: 10px 0;">Level</h3>
+                <h2 style="color: white; font-size: 3em; margin: 5px 0;">{level}</h2>
+                <p style="color: white;">Keep Going!</p>
+            </div>
+            """, unsafe_allow_html=True)
         
         with col2:
-            st.metric("📊 Difficulty Level", progress.get('difficulty_level', 1))
+            difficulty = progress.get('difficulty_level', 1)
+            difficulty_emoji = "🌟" if difficulty <= 2 else "🚀" if difficulty <= 4 else "🏆"
+            st.markdown(f"""
+            <div style="text-align: center; padding: 25px; background: linear-gradient(135deg, #FF6B6B, #4ECDC4); border-radius: 20px; margin: 10px;">
+                <div style="font-size: 3em;">{difficulty_emoji}</div>
+                <h3 style="color: white; margin: 10px 0;">Difficulty</h3>
+                <h2 style="color: white; font-size: 3em; margin: 5px 0;">{difficulty}</h2>
+                <p style="color: white;">Challenge Level!</p>
+            </div>
+            """, unsafe_allow_html=True)
         
         with col3:
             streak = progress.get('correct_streak', 0)
-            st.metric("🔥 Correct Streak", streak)
+            fire_emoji = "🔥" * min(streak // 3 + 1, 5) if streak > 0 else "🔥"
+            st.markdown(f"""
+            <div style="text-align: center; padding: 25px; background: linear-gradient(135deg, #FFE066, #FF6B6B); border-radius: 20px; margin: 10px;">
+                <div style="font-size: 3em;">{fire_emoji}</div>
+                <h3 style="color: white; margin: 10px 0;">Streak</h3>
+                <h2 style="color: white; font-size: 3em; margin: 5px 0;">{streak}</h2>
+                <p style="color: white;">In a Row!</p>
+            </div>
+            """, unsafe_allow_html=True)
         
-        # Achievements
+        # Fun achievements section
         achievements = progress.get('achievements', [])
         if achievements:
-            st.markdown("---")
-            st.subheader("🏆 Achievements")
-            for achievement in achievements:
-                st.success(f"🎉 {achievement}")
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.markdown("""
+            <div style="text-align: center; padding: 20px; background: linear-gradient(135deg, #A8E6CF, #7FCDCD); border-radius: 25px; margin: 20px 0;">
+                <h2 style="color: white; font-size: 2.5em; margin: 15px 0;">🏆 Amazing Achievements! 🏆</h2>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            for i, achievement in enumerate(achievements):
+                st.markdown(f"""
+                <div style="text-align: center; padding: 15px; background: linear-gradient(45deg, #FFE066, #FF6B6B); border-radius: 15px; margin: 10px 0; animation: celebration 0.6s ease-in-out;">
+                    <h3 style="color: white; font-size: 1.5em;">🎉 {achievement} 🎉</h3>
+                </div>
+                """, unsafe_allow_html=True)
         
         # Completed articles
         completed_articles = progress.get('completed_articles', [])
@@ -987,10 +1492,21 @@ def display_dashboard():
             st.markdown("---")
             st.caption(f"Last activity: {last_activity}")
     else:
-        st.info("Start learning to see your progress here!")
-        if st.button("🚀 Start Learning"):
-            st.session_state.show_dashboard = False
-            st.rerun()
+        # Fun empty state
+        st.markdown("""
+        <div style="text-align: center; padding: 50px; background: linear-gradient(135deg, #667eea, #764ba2); border-radius: 25px; margin: 30px 0;">
+            <div style="font-size: 5em; margin: 20px 0;">🌟</div>
+            <h2 style="color: white; font-size: 2.5em;">Ready for Your First Adventure?</h2>
+            <p style="color: white; font-size: 1.5em; margin: 20px 0;">Start learning to see your amazing progress here! 🚀</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            if st.button("🚀 Start Your Learning Journey!", use_container_width=True):
+                st.session_state.show_dashboard = False
+                st.balloons()
+                st.rerun()
 
 def display_news_articles():
     """Display news articles with Science and ELA questions"""
@@ -1058,65 +1574,89 @@ def display_news_articles():
     with col1:
         st.header("📰 Latest Educational News")
         
-        # Load articles
+        # Load articles with robust error handling
         try:
             with st.spinner("Loading latest news articles..."):
                 # Get completed articles for this kid
                 completed_articles = st.session_state.profile_manager.get_completed_articles(kid['kid_id'])
                 articles = fetch_news_articles(category_filter, 3, completed_articles)
-            
-            if not articles:
-                st.warning("No articles found. Using fallback content.")
-                articles = get_fallback_articles()
-                # Add IDs to fallback articles
-                for article in articles:
-                    if 'id' not in article:
-                        article['id'] = generate_article_id(article)
-            
-            # Initialize content adapter
-            content_adapter = ContentAdapter()
-            
-            # Display articles and track completion
-            displayed_count = 0
-            for i, article in enumerate(articles):
-                # Check if article is completed
-                article_id = article.get('id', generate_article_id(article))
-                is_completed = st.session_state.profile_manager.is_article_completed(kid['kid_id'], article_id)
                 
-                if is_completed:
-                    # Skip completed articles entirely - they shouldn't appear
-                    continue
+                # Always ensure we have articles
+                if not articles:
+                    st.info("📰 Loading curated educational content...")
+                    articles = get_fallback_articles(completed_articles)
                 
-                # Adapt content for age group
-                adapted_article = content_adapter.adapt_content(article, age_group)
-                adapted_article['id'] = article_id
+                if not articles:
+                    # Ultimate fallback - create basic articles
+                    articles = [{
+                        'id': 'basic_science_1',
+                        'title': 'Amazing Science Discovery',
+                        'content': 'Scientists have made incredible discoveries about how our world works. From tiny atoms to massive galaxies, science helps us understand everything around us. Learning about science is like going on an adventure to discover the secrets of nature!',
+                        'category': 'science',
+                        'url': '',
+                        'published': str(datetime.now()),
+                        'source': 'Educational Content'
+                    }]
                 
-                display_article_with_questions(adapted_article, age_group, displayed_count)
-                displayed_count += 1
+                content_adapter = ContentAdapter()
+                displayed_count = 0
                 
-                # Only show one article at a time to focus learning
-                break
-            
-            if displayed_count == 0:
-                st.info("🎉 Great job! You've completed all available articles. New articles will be available soon!")
-                if st.button("🔄 Check for New Articles"):
-                    fetch_news_articles.clear()
-                    st.rerun()
+                for i, article in enumerate(articles):
+                    # Skip if already completed
+                    if article['id'] in completed_articles:
+                        continue
+                    
+                    adapted_article = content_adapter.adapt_content(article, age_group)
+                    display_article_with_questions(adapted_article, age_group, i)
+                    displayed_count += 1
                 
+                if displayed_count == 0:
+                    st.markdown("""
+                    <div style="text-align: center; padding: 40px; background: linear-gradient(135deg, #A8E6CF, #7FCDCD); border-radius: 25px; margin: 20px 0;">
+                        <div style="font-size: 4em; margin: 20px 0;">🎉</div>
+                        <h2 style="color: white; font-size: 2.5em;">Awesome Job!</h2>
+                        <p style="color: white; font-size: 1.5em; margin: 20px 0;">You've completed all available articles! 🌟</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                col1, col2, col3 = st.columns([1, 2, 1])
+                with col2:
+                    if st.button("🔄 Check for New Articles", use_container_width=True):
+                        fetch_news_articles.clear()
+                        st.balloons()
+                        st.rerun()
+        
         except Exception as e:
             logger.error(f"Error loading articles: {e}")
-            st.error("Error loading articles. Using fallback content.")
-            articles = get_fallback_articles()
+            st.markdown("""
+            <div style="text-align: center; padding: 30px; background: linear-gradient(135deg, #FFE066, #FF6B6B); border-radius: 25px; margin: 20px 0;">
+                <div style="font-size: 3em; margin: 15px 0;">📚</div>
+                <h3 style="color: white; font-size: 1.8em;">Loading Educational Content...</h3>
+                <p style="color: white; font-size: 1.2em;">We're preparing some amazing stories for you!</p>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Use fallback articles with better error handling
+            try:
+                completed_articles = st.session_state.profile_manager.get_completed_articles(kid['kid_id'])
+            except:
+                completed_articles = []
+            
+            articles = get_fallback_articles(completed_articles)
             content_adapter = ContentAdapter()
-            for i, article in enumerate(articles):
-                adapted_article = content_adapter.adapt_content(article, age_group)
-                display_article_with_questions(adapted_article, age_group, i)
+            for i, article in enumerate(articles[:3]):  # Limit to 3 articles
+                try:
+                    adapted_article = content_adapter.adapt_content(article, age_group)
+                    display_article_with_questions(adapted_article, age_group, i)
+                except Exception as article_error:
+                    logger.error(f"Error displaying article {i}: {article_error}")
+                    continue
     
     with col2:
         st.header("🎮 Learning Quests")
         
         # Daily quest
-        st.subheader("📅 Daily Quest")
+        st.subheader("🎯 Daily Quest")
         st.info("Read 3 articles and answer 5 questions correctly!")
         daily_questions = current_progress.get('questions_answered', 0)
         progress = min(daily_questions / 5, 1.0)

@@ -24,6 +24,16 @@ class LLMQuestionGenerator:
         }
         self.math_generator = MathCurriculumGenerator()
         
+        # Question types for variety
+        self.question_types = {
+            "multiple_choice": "Multiple choice with 4 options",
+            "true_false": "True or False statement",
+            "fill_blank": "Fill in the blank",
+            "short_answer": "Short answer (1-2 words)",
+            "matching": "Match items (for older kids)",
+            "ordering": "Put in correct order"
+        }
+        
         # Age-specific teacher personas for question generation
         self.teacher_personas = {
             "6-8": {
@@ -57,19 +67,21 @@ class LLMQuestionGenerator:
         }
         
     def generate_questions(self, article: Dict, age_group: str, difficulty_level: int = 1) -> List[Dict]:
-        """Generate only Science and ELA questions from article content (math is separate)"""
+        """Generate diverse Science and ELA questions from article content (math is separate)"""
         try:
             questions = []
             
-            # Generate science and ELA questions from article content
-            science_q = self._generate_llm_question(article, age_group, "science", difficulty_level)
-            ela_q = self._generate_llm_question(article, age_group, "ela", difficulty_level)
-            
-            # Add valid questions to the list
-            if science_q:
-                questions.append(science_q)
-            if ela_q:
-                questions.append(ela_q)
+            # Generate multiple question types for variety
+            for subject in ["science", "ela"]:
+                # Generate 2-3 questions per subject with different types
+                question_count = 2 if difficulty_level <= 2 else 3
+                
+                for i in range(question_count):
+                    question_type = self._select_question_type(age_group, difficulty_level, i)
+                    question = self._generate_diverse_question(article, age_group, subject, difficulty_level, question_type)
+                    
+                    if question:
+                        questions.append(question)
             
             # If no questions generated, use fallback (science/ELA only)
             if not questions:
@@ -115,12 +127,15 @@ class LLMQuestionGenerator:
             "word_count": len(content.split())
         }
     
-    def _generate_llm_question(self, context: Dict, age_group: str, subject: str, difficulty_level: int, persona: Dict) -> Dict:
+    def _generate_llm_question(self, context: Dict, age_group: str, subject: str, difficulty_level: int) -> Dict:
         """Generate a question using LLM prompts with teacher persona"""
         
         title = context["title"]
         content = context["content"][:500]  # Truncate for prompt
         numbers = context["numbers"][:3]    # First 3 numbers
+        
+        # Get persona for age group
+        persona = self.teacher_personas.get(age_group, self.teacher_personas["6-8"])
         
         # Create subject-specific prompt
         subject_style = persona.get(f"{subject}_style", "")
@@ -486,6 +501,224 @@ Return ONLY a JSON object with this exact structure:
                     "explanation": "News articles are written to inform readers about current events.",
                     "reasoning": "The primary purpose of journalism is to inform the public.",
                     "hint": "Think about why people read the news.",
-                    "wrong_explanation": "News articles primarily aim to inform, not entertain or sell."
+                    "wrong_explanation": "News articles are meant to share information about what's happening."
                 }
             ]
+    
+    def _select_question_type(self, age_group: str, difficulty_level: int, question_index: int) -> str:
+        """Select appropriate question type based on age and difficulty"""
+        age_num = int(age_group.split('-')[0])
+        
+        if age_num <= 8:
+            # Younger kids: simpler question types
+            types = ["multiple_choice", "true_false", "fill_blank"]
+        elif age_num <= 11:
+            # Elementary: add short answer
+            types = ["multiple_choice", "true_false", "fill_blank", "short_answer"]
+        elif age_num <= 14:
+            # Middle school: add matching and ordering
+            types = ["multiple_choice", "true_false", "fill_blank", "short_answer", "matching", "ordering"]
+        else:
+            # High school: all types with emphasis on analysis
+            types = ["multiple_choice", "short_answer", "matching", "ordering", "fill_blank"]
+        
+        # Ensure variety - don't repeat the same type consecutively
+        if question_index == 0:
+            return random.choice(types)
+        else:
+            # Prefer different type from previous
+            return random.choice([t for t in types if t != "multiple_choice"] if question_index % 2 == 1 else types)
+    
+    def _generate_diverse_question(self, article: Dict, age_group: str, subject: str, difficulty_level: int, question_type: str) -> Dict:
+        """Generate a question of specific type"""
+        try:
+            if question_type == "multiple_choice":
+                return self._generate_llm_question(article, age_group, subject, difficulty_level)
+            elif question_type == "true_false":
+                return self._generate_true_false_question(article, age_group, subject, difficulty_level)
+            elif question_type == "fill_blank":
+                return self._generate_fill_blank_question(article, age_group, subject, difficulty_level)
+            elif question_type == "short_answer":
+                return self._generate_short_answer_question(article, age_group, subject, difficulty_level)
+            elif question_type == "matching":
+                return self._generate_matching_question(article, age_group, subject, difficulty_level)
+            elif question_type == "ordering":
+                return self._generate_ordering_question(article, age_group, subject, difficulty_level)
+            else:
+                return self._generate_llm_question(article, age_group, subject, difficulty_level)
+        except Exception as e:
+            logging.error(f"Error generating {question_type} question: {e}")
+            return None
+    
+    def _generate_true_false_question(self, article: Dict, age_group: str, subject: str, difficulty_level: int) -> Dict:
+        """Generate true/false questions"""
+        content = article.get('content', '')
+        title = article.get('title', '')
+        
+        # Create true/false statements based on article content
+        true_statements = [
+            f"The article discusses {title.lower()}",
+            f"This article is about {subject}",
+        ]
+        
+        false_statements = [
+            f"The article says that all {subject} discoveries are fake",
+            f"According to the article, {subject} is not important",
+        ]
+        
+        # Choose randomly between true and false
+        is_true = random.choice([True, False])
+        if is_true:
+            statement = random.choice(true_statements)
+            correct = "True"
+        else:
+            statement = random.choice(false_statements)
+            correct = "False"
+        
+        return {
+            "type": subject,
+            "question": f"True or False: {statement}",
+            "options": ["True", "False"],
+            "correct": correct,
+            "explanation": f"This statement is {correct.lower()} based on the article content.",
+            "reasoning": f"The article {'supports' if is_true else 'does not support'} this statement.",
+            "difficulty": difficulty_level,
+            "question_type": "true_false"
+        }
+    
+    def _generate_fill_blank_question(self, article: Dict, age_group: str, subject: str, difficulty_level: int) -> Dict:
+        """Generate fill-in-the-blank questions"""
+        content = article.get('content', '')
+        title = article.get('title', '')
+        
+        # Create fill-in-the-blank based on key concepts
+        if subject == "science":
+            blanks = [
+                ("Scientists study _____ to learn new things", "nature"),
+                ("Research helps us understand _____ better", "science"),
+                ("New discoveries in _____ can help people", "science")
+            ]
+        else:  # ELA
+            blanks = [
+                ("The main topic of this article is _____", "science"),
+                ("Articles help us learn about _____ topics", "different"),
+                ("Reading helps improve our _____", "knowledge")
+            ]
+        
+        question_text, answer = random.choice(blanks)
+        
+        return {
+            "type": subject,
+            "question": question_text,
+            "options": [answer, "wrong1", "wrong2", "wrong3"],
+            "correct": answer,
+            "explanation": f"The correct word is '{answer}' because it fits the context of the article.",
+            "reasoning": "This word best completes the sentence based on the article's content.",
+            "difficulty": difficulty_level,
+            "question_type": "fill_blank"
+        }
+    
+    def _generate_short_answer_question(self, article: Dict, age_group: str, subject: str, difficulty_level: int) -> Dict:
+        """Generate short answer questions"""
+        content = article.get('content', '')
+        title = article.get('title', '')
+        
+        if subject == "science":
+            questions = [
+                ("What do scientists study?", "nature"),
+                ("What helps us learn new things?", "research"),
+                ("What field is this article about?", "science")
+            ]
+        else:  # ELA
+            questions = [
+                ("What is the main topic?", "science"),
+                ("What type of text is this?", "article"),
+                ("What do we learn from reading?", "knowledge")
+            ]
+        
+        question_text, answer = random.choice(questions)
+        
+        return {
+            "type": subject,
+            "question": question_text,
+            "options": [answer, "other1", "other2", "other3"],
+            "correct": answer,
+            "explanation": f"The answer is '{answer}' based on the article's content.",
+            "reasoning": "This answer directly relates to the main ideas in the article.",
+            "difficulty": difficulty_level,
+            "question_type": "short_answer"
+        }
+    
+    def _generate_matching_question(self, article: Dict, age_group: str, subject: str, difficulty_level: int) -> Dict:
+        """Generate matching questions (for older kids)"""
+        if subject == "science":
+            pairs = [
+                ("Scientists", "Study nature"),
+                ("Research", "Helps discover new things"),
+                ("Experiments", "Test ideas")
+            ]
+        else:  # ELA
+            pairs = [
+                ("Article", "Type of text"),
+                ("Reading", "Builds knowledge"),
+                ("Learning", "Improves understanding")
+            ]
+        
+        # For simplicity, convert to multiple choice format
+        pair = random.choice(pairs)
+        question = f"What does '{pair[0]}' relate to?"
+        
+        return {
+            "type": subject,
+            "question": question,
+            "options": [pair[1], "Wrong option 1", "Wrong option 2", "Wrong option 3"],
+            "correct": pair[1],
+            "explanation": f"'{pair[0]}' relates to '{pair[1]}' based on the article.",
+            "reasoning": "This connection is supported by the article's content.",
+            "difficulty": difficulty_level,
+            "question_type": "matching"
+        }
+    
+    def _generate_ordering_question(self, article: Dict, age_group: str, subject: str, difficulty_level: int) -> Dict:
+        """Generate ordering/sequence questions"""
+        if subject == "science":
+            sequences = [
+                (["Observe", "Hypothesize", "Test", "Conclude"], "Scientific method steps"),
+                (["Question", "Research", "Experiment", "Results"], "Research process")
+            ]
+        else:  # ELA
+            sequences = [
+                (["Read", "Understand", "Analyze", "Learn"], "Learning process"),
+                (["Title", "Introduction", "Body", "Conclusion"], "Article structure")
+            ]
+        
+        sequence, description = random.choice(sequences)
+        shuffled = sequence.copy()
+        random.shuffle(shuffled)
+        
+        question = f"What is the correct order for {description}?"
+        correct_order = " → ".join(sequence)
+        
+        return {
+            "type": subject,
+            "question": question,
+            "options": [correct_order, "Wrong order 1", "Wrong order 2", "Wrong order 3"],
+            "correct": correct_order,
+            "explanation": f"The correct order is: {correct_order}",
+            "reasoning": f"This sequence represents the proper {description}.",
+            "difficulty": difficulty_level,
+            "question_type": "ordering"
+        }
+    
+    def get_question_variety_stats(self, questions: List[Dict]) -> Dict:
+        """Get statistics about question type variety"""
+        type_counts = {}
+        for question in questions:
+            q_type = question.get('question_type', 'multiple_choice')
+            type_counts[q_type] = type_counts.get(q_type, 0) + 1
+        
+        return {
+            'total_questions': len(questions),
+            'type_distribution': type_counts,
+            'variety_score': len(type_counts) / len(self.question_types) if questions else 0
+        }

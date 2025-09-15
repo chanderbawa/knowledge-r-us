@@ -199,7 +199,18 @@ class UserProfileManager:
             "articles_read": 0,
             "achievements": [],
             "last_activity": str(datetime.now()),
-            "daily_progress": {}
+            "daily_progress": {},
+            # Subject-specific difficulty tracking
+            "subject_difficulty": {
+                "math": {"level": 1, "correct_streak": 0, "wrong_streak": 0},
+                "science": {"level": 1, "correct_streak": 0, "wrong_streak": 0},
+                "ela": {"level": 1, "correct_streak": 0, "wrong_streak": 0}
+            },
+            "subject_progress": {
+                "math": {"questions_answered": 0, "correct_answers": 0, "total_score": 0},
+                "science": {"questions_answered": 0, "correct_answers": 0, "total_score": 0},
+                "ela": {"questions_answered": 0, "correct_answers": 0, "total_score": 0}
+            }
         }
         self._save_json(self.progress_file, progress_data)
         
@@ -289,9 +300,38 @@ class UserProfileManager:
         if new_level > old_level:
             progress['diamonds'] += 1
     
-    def _update_difficulty(self, progress: Dict, is_correct: bool):
-        """Update difficulty level based on performance"""
-        # Ensure difficulty tracking fields exist
+    def _update_difficulty(self, progress: Dict, is_correct: bool, subject: str = None):
+        """Update difficulty level based on performance (subject-specific)"""
+        # Initialize subject-specific difficulty tracking if not exists
+        if 'subject_difficulty' not in progress:
+            progress['subject_difficulty'] = {
+                "math": {"level": 1, "correct_streak": 0, "wrong_streak": 0},
+                "science": {"level": 1, "correct_streak": 0, "wrong_streak": 0},
+                "ela": {"level": 1, "correct_streak": 0, "wrong_streak": 0}
+            }
+        
+        # Update subject-specific difficulty if subject is provided
+        if subject and subject in progress['subject_difficulty']:
+            subject_diff = progress['subject_difficulty'][subject]
+            
+            if is_correct:
+                subject_diff['correct_streak'] += 1
+                subject_diff['wrong_streak'] = 0
+                
+                # Increase difficulty after 3 correct answers in a row
+                if subject_diff['correct_streak'] >= 3 and subject_diff['level'] < 3:
+                    subject_diff['level'] += 1
+                    subject_diff['correct_streak'] = 0
+            else:
+                subject_diff['wrong_streak'] += 1
+                subject_diff['correct_streak'] = 0
+                
+                # Decrease difficulty after 2 wrong answers in a row
+                if subject_diff['wrong_streak'] >= 2 and subject_diff['level'] > 1:
+                    subject_diff['level'] -= 1
+                    subject_diff['wrong_streak'] = 0
+        
+        # Also update legacy difficulty tracking for backward compatibility
         if 'difficulty_level' not in progress:
             progress['difficulty_level'] = 1
         if 'correct_streak' not in progress:
@@ -316,12 +356,64 @@ class UserProfileManager:
                 progress['difficulty_level'] -= 1
                 progress['wrong_streak'] = 0
     
-    def get_difficulty_level(self, kid_id: str) -> int:
-        """Get current difficulty level for a kid"""
+    def get_difficulty_level(self, kid_id: str, subject: str = None) -> int:
+        """Get current difficulty level for a kid (subject-specific or general)"""
         progress = self._load_json(self.progress_file)
         if kid_id not in progress:
             return 1
+        
+        # Return subject-specific difficulty if requested
+        if subject and 'subject_difficulty' in progress[kid_id]:
+            subject_diff = progress[kid_id]['subject_difficulty'].get(subject, {"level": 1})
+            return subject_diff.get('level', 1)
+        
+        # Return general difficulty level for backward compatibility
         return progress[kid_id].get('difficulty_level', 1)
+    
+    def get_subject_progress(self, kid_id: str, subject: str) -> Dict:
+        """Get progress for a specific subject"""
+        progress = self._load_json(self.progress_file)
+        if kid_id not in progress:
+            return {"questions_answered": 0, "correct_answers": 0, "total_score": 0}
+        
+        if 'subject_progress' not in progress[kid_id]:
+            return {"questions_answered": 0, "correct_answers": 0, "total_score": 0}
+        
+        return progress[kid_id]['subject_progress'].get(subject, {
+            "questions_answered": 0, "correct_answers": 0, "total_score": 0
+        })
+    
+    def update_subject_progress(self, kid_id: str, subject: str, is_correct: bool, points: int = 0):
+        """Update progress for a specific subject"""
+        progress_data = self._load_json(self.progress_file)
+        
+        if kid_id not in progress_data:
+            return
+        
+        progress = progress_data[kid_id]
+        
+        # Initialize subject progress if not exists
+        if 'subject_progress' not in progress:
+            progress['subject_progress'] = {
+                "math": {"questions_answered": 0, "correct_answers": 0, "total_score": 0},
+                "science": {"questions_answered": 0, "correct_answers": 0, "total_score": 0},
+                "ela": {"questions_answered": 0, "correct_answers": 0, "total_score": 0}
+            }
+        
+        if subject in progress['subject_progress']:
+            subject_prog = progress['subject_progress'][subject]
+            subject_prog['questions_answered'] += 1
+            if is_correct:
+                subject_prog['correct_answers'] += 1
+                subject_prog['total_score'] += points
+        
+        # Update subject-specific difficulty
+        self._update_difficulty(progress, is_correct, subject)
+        
+        # Check for achievement badges
+        self._check_achievements(progress, subject)
+        
+        self._save_json(self.progress_file, progress_data)
     
     def mark_article_completed(self, kid_id: str, article_id: str):
         """Mark an article as completed for a kid"""
@@ -357,33 +449,123 @@ class UserProfileManager:
             
         return progress[kid_id].get('completed_articles', [])
     
-    def _check_achievements(self, progress: Dict):
-        """Check and award achievements"""
-        achievements = progress.get("achievements", [])
+    def _check_achievements(self, progress: Dict, subject: str = None):
+        """Check and award achievement badges based on progress"""
+        if 'achievements' not in progress:
+            progress['achievements'] = []
+        
+        achievements = progress['achievements']
+        new_achievements = []
+        
+        # Subject-specific difficulty achievements
+        if subject and 'subject_difficulty' in progress and subject in progress['subject_difficulty']:
+            subject_diff = progress['subject_difficulty'][subject]
+            difficulty_level = subject_diff.get('level', 1)
+            
+            # Difficulty milestone badges
+            difficulty_badges = {
+                2: f"{subject.title()} Explorer 🌟",
+                3: f"{subject.title()} Master 🏆"
+            }
+            
+            for level, badge in difficulty_badges.items():
+                if difficulty_level >= level and badge not in achievements:
+                    new_achievements.append(badge)
+                    achievements.append(badge)
+        
+        # Subject-specific progress achievements
+        if 'subject_progress' in progress and subject and subject in progress['subject_progress']:
+            subject_prog = progress['subject_progress'][subject]
+            questions_answered = subject_prog.get('questions_answered', 0)
+            correct_answers = subject_prog.get('correct_answers', 0)
+            
+            # Question milestone badges
+            question_badges = {
+                10: f"{subject.title()} Beginner 📚",
+                25: f"{subject.title()} Scholar 🎓",
+                50: f"{subject.title()} Expert 💎"
+            }
+            
+            for milestone, badge in question_badges.items():
+                if questions_answered >= milestone and badge not in achievements:
+                    new_achievements.append(badge)
+                    achievements.append(badge)
+            
+            # Accuracy achievements
+            if questions_answered >= 10:
+                accuracy = (correct_answers / questions_answered) * 100
+                accuracy_badges = {
+                    80: f"{subject.title()} Accurate 🎯",
+                    90: f"{subject.title()} Precise ⚡"
+                }
+                
+                for threshold, badge in accuracy_badges.items():
+                    if accuracy >= threshold and badge not in achievements:
+                        new_achievements.append(badge)
+                        achievements.append(badge)
+        
+        # Overall achievements
+        total_score = progress.get('total_score', 0)
+        questions_answered = progress.get('questions_answered', 0)
+        completed_articles_count = len(progress.get('completed_articles', []))
         
         # Define achievement thresholds
-        completed_articles_count = len(progress.get('completed_articles', []))
         achievement_checks = [
-            ("first_question", "🔰 First Question!", progress["questions_answered"] >= 1),
+            ("first_question", "🔰 First Question!", questions_answered >= 1),
             ("first_article", "📰 First Article Complete!", completed_articles_count >= 1),
-            ("star_learner", "⭐ Star Learner!", progress["total_score"] >= 50),
-            ("knowledge_seeker", "🧠 Knowledge Seeker!", progress["questions_answered"] >= 5),
-            ("news_expert", "🚀 News Expert!", progress["total_score"] >= 100),
+            ("star_learner", "⭐ Star Learner!", total_score >= 50),
+            ("knowledge_seeker", "🧠 Knowledge Seeker!", questions_answered >= 5),
+            ("news_expert", "🚀 News Expert!", total_score >= 100),
             ("daily_reader", "📚 Daily Reader!", completed_articles_count >= 5),
-            ("math_whiz", "🔢 Math Whiz!", progress["questions_answered"] >= 20),
-            ("science_explorer", "🔬 Science Explorer!", progress["total_score"] >= 200),
+            ("quiz_champion", "🏅 Quiz Champion!", questions_answered >= 20),
+            ("score_master", "💯 Score Master!", total_score >= 200),
             ("news_master", "🏆 News Master!", completed_articles_count >= 10)
         ]
         
         for achievement_id, achievement_name, condition in achievement_checks:
-            if condition and achievement_id not in [a.get("id") for a in achievements]:
-                achievements.append({
-                    "id": achievement_id,
-                    "name": achievement_name,
-                    "earned_date": str(datetime.now())
-                })
+            if condition and achievement_name not in achievements:
+                new_achievements.append(achievement_name)
+                achievements.append(achievement_name)
         
-        progress["achievements"] = achievements
+        # Multi-subject achievements
+        if 'subject_difficulty' in progress:
+            all_subjects_level_2 = all(
+                progress['subject_difficulty'][subj].get('level', 1) >= 2 
+                for subj in ['math', 'science', 'ela']
+            )
+            
+            if all_subjects_level_2 and "Multi-Subject Explorer 🌍" not in achievements:
+                new_achievements.append("Multi-Subject Explorer 🌍")
+                achievements.append("Multi-Subject Explorer 🌍")
+        
+        # Store new achievements for display
+        if new_achievements:
+            progress['new_achievements'] = new_achievements
+    
+    def get_new_achievements(self, kid_id: str) -> List[str]:
+        """Get and clear new achievements for display"""
+        progress_data = self._load_json(self.progress_file)
+        
+        if kid_id not in progress_data:
+            return []
+        
+        new_achievements = progress_data[kid_id].get('new_achievements', [])
+        
+        # Clear new achievements after retrieving
+        if new_achievements:
+            progress_data[kid_id]['new_achievements'] = []
+            self._save_json(self.progress_file, progress_data)
+        
+        return new_achievements
+    
+    def get_all_achievements(self, kid_id: str) -> List[str]:
+        """Get all achievements for a kid"""
+        progress_data = self._load_json(self.progress_file)
+        
+        if kid_id not in progress_data:
+            return []
+        
+        return progress_data[kid_id].get('achievements', [])
     
     def delete_kid_profile(self, parent_username: str, kid_id: str):
         """Delete a kid profile"""
