@@ -412,6 +412,14 @@ def display_article_with_questions(article: Dict, age_group: str, article_index:
                 if active_tab_key not in st.session_state:
                     st.session_state[active_tab_key] = 0
                 
+                # Create section selector
+                selected_section = st.selectbox(
+                    "🎯 Choose Your Learning Adventure:",
+                    ["📰 News & Learning", "🧮 Math Practice", "🔬 Science Test", "📚 ELA Test"],
+                    index=0,
+                    key="section_selector"
+                )
+                
                 # Create custom tab selector that preserves state
                 article_id = article.get('id', f'article_{article_index}')
                 selected_tab = st.selectbox(
@@ -1059,6 +1067,248 @@ def main():
         </div>
         """, unsafe_allow_html=True)
 
+def display_science_test():
+    """Display 20-question science test"""
+    st.markdown("""
+    <div style="text-align: center; padding: 25px; background: linear-gradient(135deg, #667eea, #764ba2); border-radius: 25px; margin: 20px 0;">
+        <div style="font-size: 4em; margin: 10px 0;">🔬</div>
+        <h1 style="color: white; font-size: 3em; margin: 10px 0;">Science Challenge!</h1>
+        <p style="color: white; font-size: 1.3em;">🧪 Test your scientific knowledge! 🧪</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    kid = st.session_state.selected_kid
+    age_group = kid['age_group']
+    
+    # Get science difficulty level
+    science_difficulty = 1
+    if hasattr(st.session_state, 'profile_manager'):
+        try:
+            science_difficulty = st.session_state.profile_manager.get_difficulty_level(kid['kid_id'], 'science')
+        except:
+            science_difficulty = 1
+    
+    st.markdown(f"**Science Level:** {science_difficulty} | **Age Group:** {age_group}")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if st.button("🧪 Start Science Test (20 Questions)", key="start_science_test"):
+            st.session_state.science_test_active = True
+            st.session_state.science_test_questions = generate_science_test_questions(age_group, science_difficulty)
+            st.rerun()
+    
+    with col2:
+        if st.button("📊 View Science Progress", key="science_progress"):
+            st.info("Science progress tracking coming soon!")
+    
+    # Display science test questions
+    if st.session_state.get('science_test_active', False):
+        questions = st.session_state.get('science_test_questions', [])
+        if questions:
+            st.markdown("""
+            <div style="background: linear-gradient(135deg, #667eea, #764ba2); 
+                        border-radius: 15px; padding: 20px; margin: 15px 0; text-align: center;">
+                <h2 style="color: white; margin: 0; font-family: 'Comic Sans MS', cursive;">
+                    🔬 Science Test - 20 Questions!
+                </h2>
+                <p style="color: white; margin: 10px 0;">Answer all questions to see your score! 🌟</p>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            display_test_questions(questions, "science")
+
+def display_ela_test():
+    """Display 20-question ELA test"""
+    st.markdown("""
+    <div style="text-align: center; padding: 25px; background: linear-gradient(135deg, #f093fb, #f5576c); border-radius: 25px; margin: 20px 0;">
+        <div style="font-size: 4em; margin: 10px 0;">📚</div>
+        <h1 style="color: white; font-size: 3em; margin: 10px 0;">ELA Challenge!</h1>
+        <p style="color: white; font-size: 1.3em;">📖 Test your reading and language skills! 📖</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    kid = st.session_state.selected_kid
+    age_group = kid['age_group']
+    
+    # Get ELA difficulty level
+    ela_difficulty = 1
+    if hasattr(st.session_state, 'profile_manager'):
+        try:
+            ela_difficulty = st.session_state.profile_manager.get_difficulty_level(kid['kid_id'], 'ela')
+        except:
+            ela_difficulty = 1
+    
+    st.markdown(f"**ELA Level:** {ela_difficulty} | **Age Group:** {age_group}")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if st.button("📖 Start ELA Test (20 Questions)", key="start_ela_test"):
+            st.session_state.ela_test_active = True
+            st.session_state.ela_test_questions = generate_ela_test_questions(age_group, ela_difficulty)
+            st.rerun()
+    
+    with col2:
+        if st.button("📊 View ELA Progress", key="ela_progress"):
+            st.info("ELA progress tracking coming soon!")
+    
+    # Display ELA test questions
+    if st.session_state.get('ela_test_active', False):
+        questions = st.session_state.get('ela_test_questions', [])
+        if questions:
+            st.markdown("""
+            <div style="background: linear-gradient(135deg, #f093fb, #f5576c); 
+                        border-radius: 15px; padding: 20px; margin: 15px 0; text-align: center;">
+                <h2 style="color: white; margin: 0; font-family: 'Comic Sans MS', cursive;">
+                    📚 ELA Test - 20 Questions!
+                </h2>
+                <p style="color: white; margin: 10px 0;">Answer all questions to see your score! 🌟</p>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            display_test_questions(questions, "ela")
+
+def generate_science_test_questions(age_group: str, difficulty_level: int) -> List[Dict]:
+    """Generate 20 science test questions"""
+    from llm_question_generator import LLMQuestionGenerator
+    generator = LLMQuestionGenerator()
+    
+    questions = []
+    for i in range(20):
+        # Create a mock article context for science questions
+        mock_article = {
+            "title": f"Science Discovery {i+1}",
+            "content": "Scientists have made important discoveries about the natural world through careful observation and experimentation.",
+            "category": "science"
+        }
+        
+        # Generate science questions
+        question = generator._generate_simple_fallback(
+            generator._extract_article_context(mock_article),
+            age_group, "science", difficulty_level
+        )
+        
+        if question:
+            question["question"] = f"Q{i+1}: {question['question']}"
+            questions.append(question)
+    
+    return questions
+
+def generate_ela_test_questions(age_group: str, difficulty_level: int) -> List[Dict]:
+    """Generate 20 ELA test questions"""
+    from llm_question_generator import LLMQuestionGenerator
+    generator = LLMQuestionGenerator()
+    
+    questions = []
+    for i in range(20):
+        # Create a mock article context for ELA questions
+        mock_article = {
+            "title": f"Reading Passage {i+1}",
+            "content": "Reading comprehension and language arts skills help us understand and communicate effectively with others.",
+            "category": "ela"
+        }
+        
+        # Generate ELA questions
+        question = generator._generate_simple_fallback(
+            generator._extract_article_context(mock_article),
+            age_group, "ela", difficulty_level
+        )
+        
+        if question:
+            question["question"] = f"Q{i+1}: {question['question']}"
+            questions.append(question)
+    
+    return questions
+
+def display_test_questions(questions: List[Dict], subject: str):
+    """Display test questions with enhanced UI"""
+    total_questions = len(questions)
+    answered_key = f"{subject}_test_answers"
+    
+    if answered_key not in st.session_state:
+        st.session_state[answered_key] = {}
+    
+    # Progress bar
+    answered_count = len(st.session_state[answered_key])
+    progress = answered_count / total_questions
+    st.progress(progress, text=f"Progress: {answered_count}/{total_questions} questions answered")
+    
+    # Display questions
+    for i, question in enumerate(questions):
+        question_key = f"{subject}_test_q_{i}"
+        
+        with st.expander(f"Question {i+1} {'✅' if question_key in st.session_state[answered_key] else '❓'}", 
+                        expanded=(i == answered_count and answered_count < total_questions)):
+            
+            # Enhanced question display
+            st.markdown("""
+            <div style="background: linear-gradient(135deg, #E3F2FD, #F3E5F5); 
+                        border-radius: 15px; padding: 20px; margin: 15px 0; 
+                        border: 3px solid #FFE082; box-shadow: 0 6px 20px rgba(0,0,0,0.15);">
+                <h3 style="color: #1976D2; margin-bottom: 15px; font-family: 'Comic Sans MS', cursive; 
+                           text-align: center; font-size: 1.5em;">
+                    🤔 Choose Your Answer:
+                </h3>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            st.write(question["question"])
+            
+            if question_key not in st.session_state[answered_key]:
+                # Create enhanced buttons for each option
+                for j, option in enumerate(question["options"]):
+                    option_letters = ['A', 'B', 'C', 'D']
+                    letter = option_letters[j] if j < len(option_letters) else str(j+1)
+                    
+                    if st.button(f"{letter}. {option}", key=f"{question_key}_option_{j}", 
+                               use_container_width=True,
+                               help=f"Click to select option {letter}"):
+                        st.session_state[answered_key][question_key] = option
+                        st.rerun()
+            else:
+                # Show selected answer and result
+                selected = st.session_state[answered_key][question_key]
+                is_correct = selected == question["correct"]
+                
+                if is_correct:
+                    st.success(f"✅ Correct! You selected: **{selected}**")
+                    st.info(f"💡 **Explanation:** {question['explanation']}")
+                else:
+                    st.error(f"❌ Incorrect. You selected: **{selected}**")
+                    st.info(f"✅ **Correct answer:** {question['correct']}")
+                    st.info(f"💡 **Explanation:** {question['explanation']}")
+    
+    # Show final results if all questions answered
+    if answered_count == total_questions:
+        correct_answers = sum(1 for i, q in enumerate(questions) 
+                            if st.session_state[answered_key].get(f"{subject}_test_q_{i}") == q["correct"])
+        
+        percentage = (correct_answers / total_questions) * 100
+        
+        st.markdown("""
+        <div style="background: linear-gradient(135deg, #4CAF50, #45a049); 
+                    border-radius: 15px; padding: 25px; margin: 20px 0; text-align: center;">
+            <h2 style="color: white; margin: 0; font-family: 'Comic Sans MS', cursive;">
+                🎉 Test Complete! 🎉
+            </h2>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("✅ Correct", correct_answers)
+        with col2:
+            st.metric("❌ Incorrect", total_questions - correct_answers)
+        with col3:
+            st.metric("📊 Score", f"{percentage:.1f}%")
+        
+        # Restart button
+        if st.button(f"🔄 Take {subject.title()} Test Again", key=f"restart_{subject}_test"):
+            st.session_state[answered_key] = {}
+            st.session_state[f"{subject}_test_active"] = False
+            st.rerun()
+
 def display_math_section():
     """Display dedicated math practice section"""
     # Fun math header
@@ -1086,7 +1336,7 @@ def display_math_section():
     math_generator = MathCurriculumGenerator()
     
     # Generate multiple sets of questions
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
     
     with col1:
         if st.button("🎲 Generate New Math Questions", key="generate_math"):
@@ -1095,9 +1345,20 @@ def display_math_section():
             for key in keys_to_remove:
                 del st.session_state[key]
             st.session_state.math_questions_generated = True
+            st.session_state.math_test_mode = False
             st.rerun()
     
     with col2:
+        if st.button("📝 Take 20-Question Math Test", key="math_test"):
+            # Clear previous questions
+            keys_to_remove = [key for key in st.session_state.keys() if key.startswith('math_q_')]
+            for key in keys_to_remove:
+                del st.session_state[key]
+            st.session_state.math_questions_generated = True
+            st.session_state.math_test_mode = True
+            st.rerun()
+    
+    with col3:
         if st.button("📊 View Math Progress", key="math_progress"):
             st.info("Math progress tracking coming soon!")
     
@@ -1116,10 +1377,25 @@ def display_math_section():
                 st.warning(f"Could not load math difficulty level, using default (Level 1)")
                 math_difficulty = 1
         
-        math_questions = math_generator.generate_math_questions(age_group, math_difficulty)
+        # Determine number of questions based on mode
+        is_test_mode = st.session_state.get('math_test_mode', False)
+        num_questions = 20 if is_test_mode else 5
+        
+        math_questions = math_generator.generate_math_questions(age_group, math_difficulty, num_questions)
         
         if math_questions:
-            st.subheader("🤔 Practice Problems")
+            if is_test_mode:
+                st.markdown("""
+                <div style="background: linear-gradient(135deg, #FF6B6B, #4ECDC4); 
+                            border-radius: 15px; padding: 20px; margin: 15px 0; text-align: center;">
+                    <h2 style="color: white; margin: 0; font-family: 'Comic Sans MS', cursive;">
+                        📝 Math Test Mode - 20 Questions!
+                    </h2>
+                    <p style="color: white; margin: 10px 0;">Take your time and do your best! 🌟</p>
+                </div>
+                """, unsafe_allow_html=True)
+            else:
+                st.subheader("🤔 Practice Problems")
             
             for i, question in enumerate(math_questions):
                 with st.container():

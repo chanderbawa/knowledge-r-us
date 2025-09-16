@@ -36,16 +36,16 @@ class MathCurriculumGenerator:
             }
         }
     
-    def generate_math_questions(self, age_group: str, difficulty_level: int = 1) -> List[Dict]:
+    def generate_math_questions(self, age_group: str, difficulty_level: int = 1, num_questions: int = 3) -> List[Dict]:
         """Generate math questions for specific age group and difficulty"""
         try:
             topics = self.grade_topics.get(age_group, {}).get(difficulty_level, ["basic_math"])
             questions = []
             
-            # Generate 2-3 questions from different topics
-            selected_topics = random.sample(topics, min(3, len(topics)))
-            
-            for topic in selected_topics:
+            # Generate specified number of questions
+            for i in range(num_questions):
+                # Cycle through topics if we need more questions than topics
+                topic = topics[i % len(topics)]
                 question = self._generate_question_by_topic(topic, age_group, difficulty_level)
                 if question:
                     questions.append(question)
