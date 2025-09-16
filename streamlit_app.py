@@ -535,7 +535,7 @@ def display_article_with_questions(article: Dict, age_group: str, article_index:
                                 st.success(f"You selected: **{st.session_state[answer_key]}**")
                             answer = st.session_state.get(answer_key)
                             
-                        elif question_type == 'fill_blank':
+                        elif question_type == 'fill_blank' or question_type == 'fill_in_blank':
                             # Enhanced fill-in-the-blank styling
                             st.markdown("""
                             <div style="background: linear-gradient(135deg, #FFF3E0, #FFE0B2); 
@@ -546,14 +546,27 @@ def display_article_with_questions(article: Dict, age_group: str, article_index:
                             </div>
                             """, unsafe_allow_html=True)
                             
-                            # Enhanced selectbox with better styling
-                            answer = st.selectbox(
-                                "🎯 Choose the word that best fits:",
-                                question["options"],
-                                key=f"select_{question_key}",
-                                index=0,
-                                help="Select the word that makes the most sense in the sentence"
-                            )
+                            # Check if this is a true fill-in-the-blank (no options) or multiple choice
+                            if "options" in question and question["options"]:
+                                # Enhanced selectbox with better styling
+                                answer = st.selectbox(
+                                    "🎯 Choose the word that best fits:",
+                                    question["options"],
+                                    key=f"select_{question_key}",
+                                    index=0,
+                                    help="Select the word that makes the most sense in the sentence"
+                                )
+                            else:
+                                # True fill-in-the-blank - text input
+                                answer = st.text_input(
+                                    "✏️ Type your answer:",
+                                    key=f"text_{question_key}",
+                                    placeholder="Enter your answer here...",
+                                    help="Type the number or word that answers the question"
+                                )
+                                # Store the answer in session state
+                                if answer:
+                                    st.session_state[answer_key] = answer
                             
                         elif question_type == 'short_answer':
                             # Enhanced short answer styling
