@@ -447,6 +447,12 @@ def display_article_with_questions(article: Dict, age_group: str, article_index:
     
     # Create custom tab selector that preserves state
     article_id = article.get('id', f'article_{article_index}')
+    active_tab_key = f"active_tab_{article_id}_{article_index}"
+    
+    # Initialize active tab if not set
+    if active_tab_key not in st.session_state:
+        st.session_state[active_tab_key] = 0
+    
     selected_tab = st.selectbox(
         "Select Subject:",
         options=list(range(len(tab_names))),
@@ -454,407 +460,402 @@ def display_article_with_questions(article: Dict, age_group: str, article_index:
         index=st.session_state[active_tab_key],
         key=f"tab_selector_{article_id}_{article_index}"
     )
-                    "Select Subject:",
-                    options=list(range(len(tab_names))),
-                    format_func=lambda x: tab_names[x],
-                    index=st.session_state[active_tab_key],
-                    key=f"tab_selector_{article_id}_{article_index}"
+    
+    # Update active tab in session state
+    st.session_state[active_tab_key] = selected_tab
+    
+    # Show debug info
+    with st.expander("🔧 Debug Info"):
+        st.write("**Database Status:**")
+        profile_manager = st.session_state.profile_manager
+        import os
+        st.write(f"- Database exists: {os.path.exists(profile_manager.db_path)}")
+        st.write(f"- Database path: {profile_manager.db_path}")
+        
+        users = profile_manager.get_all_users()
+        st.write(f"- Total users: {len(users)}")
+        
+        for user in users:
+            kids = profile_manager.get_kid_profiles(user['user_id'])
+            st.write(f"  - {user['username']}: {len(kids)} kids")
+    
+    # Display questions for selected tab only
+    questions_in_tab = tab_questions[selected_tab]
+    st.markdown(f"### {tab_names[selected_tab]} Questions")
+    
+    for j, question in enumerate(questions_in_tab):
+        # Use article ID instead of index to ensure unique keys across different articles
+        article_id = article.get('id', f"article_{article_index}")
+        question_key = f"q_{article_id}_{question['type']}_{j}"
+        attempt_key = f"attempts_{question_key}"
+        
+        # Initialize attempt counter
+        if attempt_key not in st.session_state:
+            st.session_state[attempt_key] = 0
+        
+        # Display question with type-specific styling
+        question_type = question.get('question_type', question.get('type', 'multiple_choice'))
+        type_emoji = {
+            'multiple_choice': '🔤',
+            'true_false': '✅❌',
+            'fill_blank': '📝',
+            'short_answer': '💭',
+            'matching': '🔗',
+            'ordering': '🔢'
+        }.get(question_type, '❓')
+        
+        # Show question with status indicator and type
+        if question_key in st.session_state.answered_questions:
+            st.write(f"**Question {j+1}:** ✅ {type_emoji}")
+            st.write(question["question"])
+        elif st.session_state[attempt_key] > 0:
+            st.write(f"**Question {j+1}:** ❌ {type_emoji}")
+            st.write(question["question"])
+        else:
+            st.write(f"**Question {j+1}:** {type_emoji}")
+            st.write(question["question"])
+        
+        # Only show interactive elements if question hasn't been answered correctly
+        if question_key not in st.session_state.answered_questions:
+            # Initialize answer selection in session state
+            answer_key = f"answer_{question_key}"
+            if answer_key not in st.session_state:
+                st.session_state[answer_key] = None
+            
+            # Enhanced visual styling for answer options
+            st.markdown("""
+            <div style="background: linear-gradient(135deg, #E3F2FD, #F3E5F5); 
+                        border-radius: 15px; padding: 20px; margin: 15px 0; 
+                        border: 3px solid #FFE082; box-shadow: 0 6px 20px rgba(0,0,0,0.15);">
+                <h3 style="color: #1976D2; margin-bottom: 15px; font-family: 'Comic Sans MS', cursive; 
+                           text-align: center; font-size: 1.5em;">
+                    🤔 Choose Your Answer:
+                </h3>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Display question type-specific interface with enhanced styling
+            if question_type == 'true_false':
+                # Enhanced True/False styling
+                st.markdown("""
+                <div style="background: linear-gradient(135deg, #C8E6C9, #A5D6A7); 
+                            border-radius: 12px; padding: 15px; margin: 10px 0; text-align: center;">
+                    <h5 style="color: #2E7D32; margin: 0; font-family: 'Comic Sans MS', cursive;">
+                        ✅❌ True or False?
+                    </h5>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                # Create custom styled buttons for True/False
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button("✅ TRUE", key=f"true_{question_key}", 
+                               use_container_width=True,
+                               help="Click if the statement is TRUE"):
+                        answer = "True"
+                        st.session_state[answer_key] = answer
+                with col2:
+                    if st.button("❌ FALSE", key=f"false_{question_key}", 
+                               use_container_width=True,
+                               help="Click if the statement is FALSE"):
+                        answer = "False"
+                        st.session_state[answer_key] = answer
+                
+                # Show selected answer
+                if st.session_state.get(answer_key):
+                    st.success(f"You selected: **{st.session_state[answer_key]}**")
+                answer = st.session_state.get(answer_key)
+                
+            elif question_type == 'fill_blank' or question_type == 'fill_in_blank':
+                # Enhanced fill-in-the-blank styling
+                st.markdown("""
+                <div style="background: linear-gradient(135deg, #FFF3E0, #FFE0B2); 
+                            border-radius: 12px; padding: 15px; margin: 10px 0; text-align: center;">
+                    <h5 style="color: #F57C00; margin: 0; font-family: 'Comic Sans MS', cursive;">
+                        📝 Fill in the blank:
+                    </h5>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                # Check if this is a true fill-in-the-blank (no options) or multiple choice
+                if "options" in question and question["options"]:
+                    # Enhanced selectbox with better styling
+                    answer = st.selectbox(
+                        "🎯 Choose the word that best fits:",
+                        question["options"],
+                        key=f"select_{question_key}",
+                        index=0,
+                        help="Select the word that makes the most sense in the sentence"
+                    )
+                else:
+                    # True fill-in-the-blank - text input
+                    answer = st.text_input(
+                        "✏️ Type your answer:",
+                        key=f"text_{question_key}",
+                        placeholder="Enter your answer here...",
+                        help="Type the number or word that answers the question"
+                    )
+                    # Store the answer in session state
+                    if answer:
+                        st.session_state[answer_key] = answer
+                
+            elif question_type == 'short_answer':
+                # Enhanced short answer styling
+                st.markdown("""
+                <div style="background: linear-gradient(135deg, #E8F5E8, #C8E6C9); 
+                            border-radius: 12px; padding: 15px; margin: 10px 0; text-align: center;">
+                    <h5 style="color: #388E3C; margin: 0; font-family: 'Comic Sans MS', cursive;">
+                        💭 Short Answer:
+                    </h5>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                answer = st.selectbox(
+                    "🎯 Choose the best answer:",
+                    question["options"],
+                    key=f"select_{question_key}",
+                    index=0,
+                    help="Pick the answer that best fits the question"
                 )
                 
-                # Update active tab in session state
-                st.session_state[active_tab_key] = selected_tab
+            elif question_type == 'ordering':
+                # Enhanced ordering styling
+                st.markdown("""
+                <div style="background: linear-gradient(135deg, #F3E5F5, #E1BEE7); 
+                            border-radius: 12px; padding: 15px; margin: 10px 0; text-align: center;">
+                    <h5 style="color: #7B1FA2; margin: 0; font-family: 'Comic Sans MS', cursive;">
+                        🔢 Put in the correct order:
+                    </h5>
+                </div>
+                """, unsafe_allow_html=True)
                 
-                # Show debug info
-                with st.expander("🔧 Debug Info"):
-                    st.write("**Database Status:**")
-                    profile_manager = st.session_state.profile_manager
-                    import os
-                    st.write(f"- Database exists: {os.path.exists(profile_manager.db_path)}")
-                    st.write(f"- Database path: {profile_manager.db_path}")
-                    
-                    users = profile_manager.get_all_users()
-                    st.write(f"- Total users: {len(users)}")
-                    
-                    for user in users:
-                        kids = profile_manager.get_kid_profiles(user['user_id'])
-                        st.write(f"  - {user['username']}: {len(kids)} kids")
+                # Enhanced radio buttons for ordering
+                for i, option in enumerate(question["options"]):
+                    if st.button(f"📋 {option}", key=f"order_{question_key}_{i}", 
+                               use_container_width=True,
+                               help=f"Click to select this sequence"):
+                        answer = option
+                        st.session_state[answer_key] = answer
                 
-                # Display questions for selected tab only
-                questions_in_tab = tab_questions[selected_tab]
-                st.markdown(f"### {tab_names[selected_tab]} Questions")
+                # Show selected answer
+                if st.session_state.get(answer_key):
+                    st.success(f"You selected: **{st.session_state[answer_key]}**")
+                answer = st.session_state.get(answer_key)
                 
-                for j, question in enumerate(questions_in_tab):
-                    # Use article ID instead of index to ensure unique keys across different articles
-                    article_id = article.get('id', f"article_{article_index}")
-                    question_key = f"q_{article_id}_{question['type']}_{j}"
-                    attempt_key = f"attempts_{question_key}"
+            else:
+                # Enhanced multiple choice styling
+                st.markdown("""
+                <div style="background: linear-gradient(135deg, #E3F2FD, #BBDEFB); 
+                            border-radius: 12px; padding: 15px; margin: 10px 0; text-align: center;">
+                    <h5 style="color: #1976D2; margin: 0; font-family: 'Comic Sans MS', cursive;">
+                        🔤 Multiple Choice:
+                    </h5>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                # Create enhanced buttons for each option
+                for i, option in enumerate(question["options"]):
+                    option_letters = ['A', 'B', 'C', 'D']
+                    letter = option_letters[i] if i < len(option_letters) else str(i+1)
                     
-                    # Initialize attempt counter
-                    if attempt_key not in st.session_state:
-                        st.session_state[attempt_key] = 0
-                    
-                    # Display question with type-specific styling
-                    question_type = question.get('question_type', question.get('type', 'multiple_choice'))
-                    type_emoji = {
-                        'multiple_choice': '🔤',
-                        'true_false': '✅❌',
-                        'fill_blank': '📝',
-                        'short_answer': '💭',
-                        'matching': '🔗',
-                        'ordering': '🔢'
-                    }.get(question_type, '❓')
-                    
-                    # Show question with status indicator and type
-                    if question_key in st.session_state.answered_questions:
-                        st.write(f"**Question {j+1}:** ✅ {type_emoji}")
-                        st.write(question["question"])
-                    elif st.session_state[attempt_key] > 0:
-                        st.write(f"**Question {j+1}:** ❌ {type_emoji}")
-                        st.write(question["question"])
+                    if st.button(f"{letter}. {option}", key=f"choice_{question_key}_{i}", 
+                               use_container_width=True,
+                               help=f"Click to select option {letter}"):
+                        answer = option
+                        st.session_state[answer_key] = answer
+                
+                # Show selected answer
+                if st.session_state.get(answer_key):
+                    st.success(f"You selected: **{st.session_state[answer_key]}**")
+                answer = st.session_state.get(answer_key)
+            
+            # Store the selected answer
+            if answer is not None:
+                st.session_state[answer_key] = answer
+            
+            # Enhanced Check Answer button
+            st.markdown("<br>", unsafe_allow_html=True)  # Add spacing
+            
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
+                if st.button(f"🎯 Check My Answer!", key=f"check_{question_key}", 
+                           use_container_width=True,
+                           help="Click to see if your answer is correct!"):
+                    selected_answer = st.session_state.get(answer_key)
+                    if selected_answer is None:
+                        st.error("⚠️ Please select an answer first!")
                     else:
-                        st.write(f"**Question {j+1}:** {type_emoji}")
-                        st.write(question["question"])
+                        st.session_state[attempt_key] += 1
                     
-                    # Only show interactive elements if question hasn't been answered correctly
-                    if question_key not in st.session_state.answered_questions:
-                        # Initialize answer selection in session state
-                        answer_key = f"answer_{question_key}"
-                        if answer_key not in st.session_state:
-                            st.session_state[answer_key] = None
+                    if selected_answer == question["correct"]:
+                        # Correct answer with celebration
+                        points = 10 if st.session_state[attempt_key] == 1 else 5
                         
-                        # Enhanced visual styling for answer options
-                        st.markdown("""
-                        <div style="background: linear-gradient(135deg, #E3F2FD, #F3E5F5); 
-                                    border-radius: 15px; padding: 20px; margin: 15px 0; 
-                                    border: 3px solid #FFE082; box-shadow: 0 6px 20px rgba(0,0,0,0.15);">
-                            <h3 style="color: #1976D2; margin-bottom: 15px; font-family: 'Comic Sans MS', cursive; 
-                                       text-align: center; font-size: 1.5em;">
-                                🤔 Choose Your Answer:
-                            </h3>
-                        </div>
-                        """, unsafe_allow_html=True)
+                        # Fun celebration messages
+                        celebration_messages = [
+                            "🎉 Amazing! You're a superstar!",
+                            "✨ Fantastic! You nailed it!",
+                            "🎆 Incredible! You're on fire!",
+                            "🌈 Wonderful! You're brilliant!",
+                            "🚀 Outstanding! You rock!"
+                        ]
+                        import random
+                        celebration = random.choice(celebration_messages)
                         
-                        # Display question type-specific interface with enhanced styling
-                        if question_type == 'true_false':
-                            # Enhanced True/False styling
-                            st.markdown("""
-                            <div style="background: linear-gradient(135deg, #C8E6C9, #A5D6A7); 
-                                        border-radius: 12px; padding: 15px; margin: 10px 0; text-align: center;">
-                                <h5 style="color: #2E7D32; margin: 0; font-family: 'Comic Sans MS', cursive;">
-                                    ✅❌ True or False?
-                                </h5>
-                            </div>
-                            """, unsafe_allow_html=True)
+                        star_message = "⭐" * min(points // 2, 5)
+                        feedback = {
+                            'type': 'success',
+                            'message': f"{celebration} {star_message}",
+                            'points': f"+{points} points!",
+                            'explanation': f"📚 **Why this is right:** {question['explanation']}",
+                            'star_message': star_message
+                        }
+                        st.session_state[feedback_key] = feedback
+                        st.session_state.answered_questions.add(question_key)
+                        st.session_state.score += points
+                        st.session_state.questions_answered += 1
+                        
+                        # Update kid progress if authenticated
+                        if hasattr(st.session_state, 'selected_kid') and hasattr(st.session_state, 'profile_manager'):
+                            old_progress = st.session_state.profile_manager.get_kid_progress(st.session_state.selected_kid['kid_id'])
                             
-                            # Create custom styled buttons for True/False
-                            col1, col2 = st.columns(2)
-                            with col1:
-                                if st.button("✅ TRUE", key=f"true_{question_key}", 
-                                           use_container_width=True,
-                                           help="Click if the statement is TRUE"):
-                                    answer = "True"
-                                    st.session_state[answer_key] = answer
-                            with col2:
-                                if st.button("❌ FALSE", key=f"false_{question_key}", 
-                                           use_container_width=True,
-                                           help="Click if the statement is FALSE"):
-                                    answer = "False"
-                                    st.session_state[answer_key] = answer
+                            # Check if this completes the article
+                            article_id = article.get('id', f"article_{article_index}")
+                            all_questions_answered = check_if_article_completed(article_id)
                             
-                            # Show selected answer
-                            if st.session_state.get(answer_key):
-                                st.success(f"You selected: **{st.session_state[answer_key]}**")
-                            answer = st.session_state.get(answer_key)
-                            
-                        elif question_type == 'fill_blank' or question_type == 'fill_in_blank':
-                            # Enhanced fill-in-the-blank styling
-                            st.markdown("""
-                            <div style="background: linear-gradient(135deg, #FFF3E0, #FFE0B2); 
-                                        border-radius: 12px; padding: 15px; margin: 10px 0; text-align: center;">
-                                <h5 style="color: #F57C00; margin: 0; font-family: 'Comic Sans MS', cursive;">
-                                    📝 Fill in the blank:
-                                </h5>
-                            </div>
-                            """, unsafe_allow_html=True)
-                            
-                            # Check if this is a true fill-in-the-blank (no options) or multiple choice
-                            if "options" in question and question["options"]:
-                                # Enhanced selectbox with better styling
-                                answer = st.selectbox(
-                                    "🎯 Choose the word that best fits:",
-                                    question["options"],
-                                    key=f"select_{question_key}",
-                                    index=0,
-                                    help="Select the word that makes the most sense in the sentence"
-                                )
-                            else:
-                                # True fill-in-the-blank - text input
-                                answer = st.text_input(
-                                    "✏️ Type your answer:",
-                                    key=f"text_{question_key}",
-                                    placeholder="Enter your answer here...",
-                                    help="Type the number or word that answers the question"
-                                )
-                                # Store the answer in session state
-                                if answer:
-                                    st.session_state[answer_key] = answer
-                            
-                        elif question_type == 'short_answer':
-                            # Enhanced short answer styling
-                            st.markdown("""
-                            <div style="background: linear-gradient(135deg, #E8F5E8, #C8E6C9); 
-                                        border-radius: 12px; padding: 15px; margin: 10px 0; text-align: center;">
-                                <h5 style="color: #388E3C; margin: 0; font-family: 'Comic Sans MS', cursive;">
-                                    💭 Short Answer:
-                                </h5>
-                            </div>
-                            """, unsafe_allow_html=True)
-                            
-                            answer = st.selectbox(
-                                "🎯 Choose the best answer:",
-                                question["options"],
-                                key=f"select_{question_key}",
-                                index=0,
-                                help="Pick the answer that best fits the question"
+                            st.session_state.profile_manager.update_kid_progress(
+                                st.session_state.selected_kid['kid_id'], 
+                                score_increment=points, 
+                                questions_increment=1,
+                                article_id=article_id if all_questions_answered else None
                             )
+                            new_progress = st.session_state.profile_manager.get_kid_progress(st.session_state.selected_kid['kid_id'])
                             
-                        elif question_type == 'ordering':
-                            # Enhanced ordering styling
-                            st.markdown("""
-                            <div style="background: linear-gradient(135deg, #F3E5F5, #E1BEE7); 
-                                        border-radius: 12px; padding: 15px; margin: 10px 0; text-align: center;">
-                                <h5 style="color: #7B1FA2; margin: 0; font-family: 'Comic Sans MS', cursive;">
-                                    🔢 Put in the correct order:
-                                </h5>
-                            </div>
-                            """, unsafe_allow_html=True)
+                            # Check if diamond was earned
+                            if new_progress.get('diamonds', 0) > old_progress.get('diamonds', 0):
+                                st.success("💎 **DIAMOND EARNED!** 💎 Amazing work!")
                             
-                            # Enhanced radio buttons for ordering
-                            for i, option in enumerate(question["options"]):
-                                if st.button(f"📋 {option}", key=f"order_{question_key}_{i}", 
-                                           use_container_width=True,
-                                           help=f"Click to select this sequence"):
-                                    answer = option
-                                    st.session_state[answer_key] = answer
+                            # Check if level up occurred
+                            if new_progress.get('level', 1) > old_progress.get('level', 1):
+                                st.success(f"🎯 **LEVEL UP!** You reached Level {new_progress.get('level', 1)}! 💎")
                             
-                            # Show selected answer
-                            if st.session_state.get(answer_key):
-                                st.success(f"You selected: **{st.session_state[answer_key]}**")
-                            answer = st.session_state.get(answer_key)
-                            
-                        else:
-                            # Enhanced multiple choice styling
-                            st.markdown("""
-                            <div style="background: linear-gradient(135deg, #E3F2FD, #BBDEFB); 
-                                        border-radius: 12px; padding: 15px; margin: 10px 0; text-align: center;">
-                                <h5 style="color: #1976D2; margin: 0; font-family: 'Comic Sans MS', cursive;">
-                                    🔤 Multiple Choice:
-                                </h5>
-                            </div>
-                            """, unsafe_allow_html=True)
-                            
-                            # Create enhanced buttons for each option
-                            for i, option in enumerate(question["options"]):
-                                option_letters = ['A', 'B', 'C', 'D']
-                                letter = option_letters[i] if i < len(option_letters) else str(i+1)
-                                
-                                if st.button(f"{letter}. {option}", key=f"choice_{question_key}_{i}", 
-                                           use_container_width=True,
-                                           help=f"Click to select option {letter}"):
-                                    answer = option
-                                    st.session_state[answer_key] = answer
-                            
-                            # Show selected answer
-                            if st.session_state.get(answer_key):
-                                st.success(f"You selected: **{st.session_state[answer_key]}**")
-                            answer = st.session_state.get(answer_key)
+                            # Check if article completed
+                            if all_questions_answered:
+                                st.success(f"🎉 **ARTICLE COMPLETED!** You finished '{article['title']}'!")
+                                st.info("🔄 Refresh to see new articles!")
                         
-                        # Store the selected answer
-                        if answer is not None:
-                            st.session_state[answer_key] = answer
-                        
-                        # Enhanced Check Answer button
-                        st.markdown("<br>", unsafe_allow_html=True)  # Add spacing
-                        
-                        col1, col2, col3 = st.columns([1, 2, 1])
-                        with col2:
-                            if st.button(f"🎯 Check My Answer!", key=f"check_{question_key}", 
-                                       use_container_width=True,
-                                       help="Click to see if your answer is correct!"):
-                                selected_answer = st.session_state.get(answer_key)
-                                if selected_answer is None:
-                                    st.error("⚠️ Please select an answer first!")
-                                else:
-                                    st.session_state[attempt_key] += 1
-                                
-                                if selected_answer == question["correct"]:
-                                    # Correct answer with celebration
-                                    points = 10 if st.session_state[attempt_key] == 1 else 5
-                                    
-                                    # Fun celebration messages
-                                    celebration_messages = [
-                                        "🎉 Amazing! You're a superstar!",
-                                        "✨ Fantastic! You nailed it!",
-                                        "🎆 Incredible! You're on fire!",
-                                        "🌈 Wonderful! You're brilliant!",
-                                        "🚀 Outstanding! You rock!"
-                                    ]
-                                    import random
-                                    celebration = random.choice(celebration_messages)
-                                    
-                                    star_message = "⭐" * min(points // 2, 5)
-                                    feedback = {
-                                        'type': 'success',
-                                        'message': f"{celebration} {star_message}",
-                                        'points': f"+{points} points!",
-                                        'explanation': f"📚 **Why this is right:** {question['explanation']}",
-                                        'star_message': star_message
-                                    }
-                                    st.session_state[feedback_key] = feedback
-                                    st.session_state.answered_questions.add(question_key)
-                                    st.session_state.score += points
-                                    st.session_state.questions_answered += 1
-                                    
-                                    # Update kid progress if authenticated
-                                    if hasattr(st.session_state, 'selected_kid') and hasattr(st.session_state, 'profile_manager'):
-                                        old_progress = st.session_state.profile_manager.get_kid_progress(st.session_state.selected_kid['kid_id'])
-                                        
-                                        # Check if this completes the article
-                                        article_id = article.get('id', f"article_{article_index}")
-                                        all_questions_answered = check_if_article_completed(article_id)
-                                        
-                                        st.session_state.profile_manager.update_kid_progress(
-                                            st.session_state.selected_kid['kid_id'], 
-                                            score_increment=points, 
-                                            questions_increment=1,
-                                            article_id=article_id if all_questions_answered else None
-                                        )
-                                        new_progress = st.session_state.profile_manager.get_kid_progress(st.session_state.selected_kid['kid_id'])
-                                        
-                                        # Check if diamond was earned
-                                        if new_progress.get('diamonds', 0) > old_progress.get('diamonds', 0):
-                                            st.success("💎 **DIAMOND EARNED!** 💎 Amazing work!")
-                                        
-                                        # Check if level up occurred
-                                        if new_progress.get('level', 1) > old_progress.get('level', 1):
-                                            st.success(f"🎯 **LEVEL UP!** You reached Level {new_progress.get('level', 1)}! 💎")
-                                        
-                                        # Check if article completed
-                                        if all_questions_answered:
-                                            st.success(f"🎉 **ARTICLE COMPLETED!** You finished '{article['title']}'!")
-                                            st.info("🔄 Refresh to see new articles!")
-                                    
-                                    st.balloons()
-                                else:
-                                    # Wrong answer with encouraging feedback
-                                    st.session_state[attempt_key] += 1
-                                    
-                                    if st.session_state[attempt_key] >= 2:
-                                        # Show correct answer after 2 attempts with encouragement
-                                        encouraging_messages = [
-                                            "💪 Don't worry! Learning is all about trying!",
-                                            "🌟 Great effort! Now you know for next time!",
-                                            "😊 Nice try! Every mistake helps us learn!",
-                                            "🌈 Good attempt! You're getting smarter!"
-                                        ]
-                                        encouragement = random.choice(encouraging_messages)
-                                        
-                                        feedback = {
-                                            'type': 'info',
-                                            'message': f"{encouragement}",
-                                            'correct_answer': f"🎯 The correct answer is: **{question['correct']}**",
-                                            'explanation': f"📚 **Why this is right:** {question['explanation']}",
-                                            'reasoning': f"💡 **Remember this:** {question['reasoning']}"
-                                        }
-                                        st.session_state.answered_questions.add(question_key)
-                                        st.session_state.questions_answered += 1
-                                        # No points for wrong answer after 2 attempts
-                                        
-                                        # Update kid progress if authenticated (no points, subject-specific)
-                                        if hasattr(st.session_state, 'selected_kid') and hasattr(st.session_state, 'profile_manager'):
-                                            kid_id = st.session_state.selected_kid['kid_id']
-                                            question_subject = question.get('type', 'general')
-                                            
-                                            # Update subject-specific progress (wrong answer)
-                                            st.session_state.profile_manager.update_subject_progress(
-                                                kid_id, question_subject, False, 0
-                                            )
-                                            
-                                            # Also update general progress for backward compatibility
-                                            st.session_state.profile_manager.update_kid_progress(
-                                                kid_id, 
-                                                score_increment=0, 
-                                                questions_increment=1
-                                            )
-                                            
-                                            # Check for new achievements (even for wrong answers)
-                                            new_achievements = st.session_state.profile_manager.get_new_achievements(kid_id)
-                                            if new_achievements:
-                                                for achievement in new_achievements:
-                                                    st.success(f"🏆 **NEW BADGE EARNED!** {achievement}")
-                                                st.balloons()
-                                    else:
-                                        # First wrong attempt - show detailed explanation and hint
-                                        wrong_explanation = question.get('wrong_explanation', 'That answer is not correct.')
-                                        feedback = {
-                                            'type': 'hint',
-                                            'message': "❌ Not quite right. Let me explain why:",
-                                            'wrong_explanation': f"🔍 **Why this is wrong:** {wrong_explanation}",
-                                            'hint': f"💡 **Hint:** {question['hint']}",
-                                            'encouragement': "Try again! You can do it! 🌟"
-                                        }
-                                    st.session_state[feedback_key] = feedback
+                        st.balloons()
                     else:
-                        # Question already answered - show completion status
-                        st.success("✅ **Question completed!**")
-                    
-                    # Display persistent feedback
-                    feedback_key = f"feedback_{question_key}"
-                    if feedback_key in st.session_state:
-                        feedback = st.session_state[feedback_key]
+                        # Wrong answer with encouraging feedback
+                        st.session_state[attempt_key] += 1
                         
-                        if feedback['type'] == 'success':
-                            # Celebration for correct answers
-                            st.markdown(f"""
-                            <div style="text-align: center; padding: 20px; background: linear-gradient(45deg, #A8E6CF, #7FCDCD); border-radius: 20px; margin: 15px 0; animation: celebration 0.6s ease-in-out;">
-                                <h2 style="color: white; font-size: 2em; margin: 10px 0;">{feedback['message']}</h2>
-                                <h3 style="color: white; font-size: 1.5em;">{feedback['points']}</h3>
-                            </div>
-                            """, unsafe_allow_html=True)
-                            st.balloons()
-                            st.info(feedback['explanation'])
-                        elif feedback['type'] == 'hint':
-                            # Encouraging message for wrong answers
-                            st.markdown(f"""
-                            <div style="text-align: center; padding: 15px; background: linear-gradient(45deg, #FFE066, #FFB347); border-radius: 15px; margin: 10px 0;">
-                                <h3 style="color: white; font-size: 1.3em;">{feedback['message']}</h3>
-                            </div>
-                            """, unsafe_allow_html=True)
-                            if 'hint' in feedback:
-                                st.info(feedback['hint'])
-                        elif feedback['type'] == 'info':
-                            # Final answer reveal with encouragement
-                            st.markdown(f"""
-                            <div style="text-align: center; padding: 15px; background: linear-gradient(45deg, #87CEEB, #98FB98); border-radius: 15px; margin: 10px 0;">
-                                <h3 style="color: white; font-size: 1.3em;">{feedback['message']}</h3>
-                            </div>
-                            """, unsafe_allow_html=True)
-                            if 'correct_answer' in feedback:
-                                st.info(feedback['correct_answer'])
-                            st.info(feedback['explanation'])
-                            st.info(feedback['reasoning'])
-                    
-                    # Show fun attempt status
-                    if st.session_state[attempt_key] > 0 and question_key not in st.session_state.answered_questions:
-                        if st.session_state[attempt_key] == 1:
-                            st.markdown("""
-                            <div style="text-align: center; padding: 10px; background: rgba(255, 255, 255, 0.8); border-radius: 10px; margin: 5px 0;">
-                                <p style="color: #FF6B6B; font-weight: bold; margin: 0;">💪 One more try! You've got this, superstar! 🌟</p>
-                            </div>
-                            """, unsafe_allow_html=True)
-                    
-                    if j < len(questions_in_tab) - 1:  # Don't add divider after last question
-                        st.divider()
+                        if st.session_state[attempt_key] >= 2:
+                            # Show correct answer after 2 attempts with encouragement
+                            encouraging_messages = [
+                                "💪 Don't worry! Learning is all about trying!",
+                                "🌟 Great effort! Now you know for next time!",
+                                "😊 Nice try! Every mistake helps us learn!",
+                                "🌈 Good attempt! You're getting smarter!"
+                            ]
+                            encouragement = random.choice(encouraging_messages)
+                            
+                            feedback = {
+                                'type': 'info',
+                                'message': f"{encouragement}",
+                                'correct_answer': f"🎯 The correct answer is: **{question['correct']}**",
+                                'explanation': f"📚 **Why this is right:** {question['explanation']}",
+                                'reasoning': f"💡 **Remember this:** {question['reasoning']}"
+                            }
+                            st.session_state.answered_questions.add(question_key)
+                            st.session_state.questions_answered += 1
+                            # No points for wrong answer after 2 attempts
+                            
+                            # Update kid progress if authenticated (no points, subject-specific)
+                            if hasattr(st.session_state, 'selected_kid') and hasattr(st.session_state, 'profile_manager'):
+                                kid_id = st.session_state.selected_kid['kid_id']
+                                question_subject = question.get('type', 'general')
+                                
+                                # Update subject-specific progress (wrong answer)
+                                st.session_state.profile_manager.update_subject_progress(
+                                    kid_id, question_subject, False, 0
+                                )
+                                
+                                # Also update general progress for backward compatibility
+                                st.session_state.profile_manager.update_kid_progress(
+                                    kid_id, 
+                                    score_increment=0, 
+                                    questions_increment=1
+                                )
+                                
+                                # Check for new achievements (even for wrong answers)
+                                new_achievements = st.session_state.profile_manager.get_new_achievements(kid_id)
+                                if new_achievements:
+                                    for achievement in new_achievements:
+                                        st.success(f"🏆 **NEW BADGE EARNED!** {achievement}")
+                                    st.balloons()
+                        else:
+                            # First wrong attempt - show detailed explanation and hint
+                            wrong_explanation = question.get('wrong_explanation', 'That answer is not correct.')
+                            feedback = {
+                                'type': 'hint',
+                                'message': "❌ Not quite right. Let me explain why:",
+                                'wrong_explanation': f"🔍 **Why this is wrong:** {wrong_explanation}",
+                                'hint': f"💡 **Hint:** {question['hint']}",
+                                'encouragement': "Try again! You can do it! 🌟"
+                            }
+                        st.session_state[feedback_key] = feedback
+        
+        else:
+            # Question already answered - show completion status
+            st.success("✅ **Question completed!**")
+        
+        # Display persistent feedback
+        feedback_key = f"feedback_{question_key}"
+        if feedback_key in st.session_state:
+            feedback = st.session_state[feedback_key]
+            
+            if feedback['type'] == 'success':
+                # Celebration for correct answers
+                st.markdown(f"""
+                <div style="text-align: center; padding: 20px; background: linear-gradient(45deg, #A8E6CF, #7FCDCD); border-radius: 20px; margin: 15px 0; animation: celebration 0.6s ease-in-out;">
+                    <h2 style="color: white; font-size: 2em; margin: 10px 0;">{feedback['message']}</h2>
+                    <h3 style="color: white; font-size: 1.5em;">{feedback['points']}</h3>
+                </div>
+                """, unsafe_allow_html=True)
+                st.balloons()
+                st.info(feedback['explanation'])
+            elif feedback['type'] == 'hint':
+                # Encouraging message for wrong answers
+                st.markdown(f"""
+                <div style="text-align: center; padding: 15px; background: linear-gradient(45deg, #FFE066, #FFB347); border-radius: 15px; margin: 10px 0;">
+                    <h3 style="color: white; font-size: 1.3em;">{feedback['message']}</h3>
+                </div>
+                """, unsafe_allow_html=True)
+                if 'hint' in feedback:
+                    st.info(feedback['hint'])
+            elif feedback['type'] == 'info':
+                # Final answer reveal with encouragement
+                st.markdown(f"""
+                <div style="text-align: center; padding: 15px; background: linear-gradient(45deg, #87CEEB, #98FB98); border-radius: 15px; margin: 10px 0;">
+                    <h3 style="color: white; font-size: 1.3em;">{feedback['message']}</h3>
+                </div>
+                """, unsafe_allow_html=True)
+                if 'correct_answer' in feedback:
+                    st.info(feedback['correct_answer'])
+                st.info(feedback['explanation'])
+                st.info(feedback['reasoning'])
+        
+        # Show fun attempt status
+        if st.session_state[attempt_key] > 0 and question_key not in st.session_state.answered_questions:
+            if st.session_state[attempt_key] == 1:
+                st.markdown("""
+                <div style="text-align: center; padding: 10px; background: rgba(255, 255, 255, 0.8); border-radius: 10px; margin: 5px 0;">
+                    <p style="color: #FF6B6B; font-weight: bold; margin: 0;">💪 One more try! You've got this, superstar! 🌟</p>
+                </div>
+                """, unsafe_allow_html=True)
+        
+        if j < len(questions_in_tab) - 1:  # Don't add divider after last question
+            st.divider()
 
 def add_kid_friendly_styles():
     """Add kid-friendly CSS styles"""
@@ -1806,11 +1807,11 @@ def display_math_section():
                                                 score_increment=0, 
                                                 questions_increment=1
                                             )
-                    else:
-                        st.success("✅ **Problem completed!**")
-                    
-                    if i < len(math_questions) - 1:
-                        st.divider()
+                else:
+                    st.success("✅ **Problem completed!**")
+                
+                if i < len(math_questions) - 1:
+                    st.divider()
 
 def handle_authentication():
     """Handle user authentication"""
