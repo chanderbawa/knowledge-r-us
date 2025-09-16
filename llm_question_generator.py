@@ -69,33 +69,12 @@ class LLMQuestionGenerator:
     def generate_questions(self, article: Dict, age_group: str, difficulty_level: int = 1) -> List[Dict]:
         """Generate diverse Science and ELA questions from article content (math is separate)"""
         try:
-            print(f"Starting question generation for article: {article.get('title', 'Unknown')}")
-            questions = []
+            print(f"Starting FAST question generation for article: {article.get('title', 'Unknown')}")
             
-            # Generate multiple question types for variety
-            for subject in ["science", "ela"]:
-                print(f"Generating {subject} questions...")
-                # Generate 2-3 questions per subject with different types
-                question_count = 2 if difficulty_level <= 2 else 3
-                
-                for i in range(question_count):
-                    question_type = self._select_question_type(age_group, difficulty_level, i)
-                    print(f"Generating {subject} question {i+1} of type {question_type}")
-                    question = self._generate_diverse_question(article, age_group, subject, difficulty_level, question_type)
-                    
-                    if question:
-                        print(f"Successfully generated {subject} question: {question.get('question', 'No question text')[:50]}...")
-                        questions.append(question)
-                    else:
-                        print(f"Failed to generate {subject} question {i+1}")
-            
-            print(f"Generated {len(questions)} questions total")
-            
-            # If no questions generated, use fallback (science/ELA only)
-            if not questions:
-                print("No questions generated, using fallback...")
-                questions = self._get_news_fallback_questions(age_group, difficulty_level)
-                print(f"Fallback generated {len(questions)} questions")
+            # Skip complex LLM generation - go directly to fast fallback
+            print("Using fast fallback question generation...")
+            questions = self._get_news_fallback_questions(age_group, difficulty_level)
+            print(f"Generated {len(questions)} questions quickly")
             
             return questions
             
@@ -191,22 +170,8 @@ Return ONLY a JSON object with this exact structure:
     def _simulate_llm_response(self, prompt: str, context: Dict, age_group: str, subject: str, difficulty_level: int) -> Dict:
         """Simulate LLM response - replace with actual LLM API call in production"""
         
-        # Try to use actual LLM API if available
-        try:
-            from llm_api_integration import llm_client
-            
-            # Attempt to generate using LLM
-            llm_response = llm_client.generate_question(prompt)
-            if llm_response and self._validate_question_format(llm_response):
-                print(f"Generated {subject} question using LLM API")
-                return llm_response
-        except ImportError:
-            print("LLM API integration not available")
-        except Exception as e:
-            print(f"LLM API failed: {e}")
-        
-        # Fall back to simple contextual generation
-        print(f"Using simplified fallback for {subject} question")
+        # Skip LLM API call for now - go directly to fast fallback
+        print(f"Skipping LLM API call - using fast fallback for {subject} question")
         fallback_question = self._generate_simple_fallback(context, age_group, subject, difficulty_level)
         print(f"Generated fallback question: {fallback_question.get('question', 'No question')}")
         return fallback_question

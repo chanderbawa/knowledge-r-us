@@ -407,22 +407,53 @@ def display_article_with_questions(article: Dict, age_group: str, article_index:
                 tab_questions.append(ela_questions)
             
             if tab_names:
-                # Initialize active tab for this article
                 active_tab_key = f"active_tab_article_{article_index}"
                 if active_tab_key not in st.session_state:
                     st.session_state[active_tab_key] = 0
                 
-                # Create section selector
-                selected_section = st.selectbox(
-                    "🎯 Choose Your Learning Adventure:",
-                    ["📰 News & Learning", "🧮 Math Practice", "🔬 Science Test", "📚 ELA Test"],
-                    index=0,
-                    key="section_selector"
-                )
-                
-                # Create custom tab selector that preserves state
-                article_id = article.get('id', f'article_{article_index}')
-                selected_tab = st.selectbox(
+                # Navigation with colorful cards
+    st.markdown("""
+    <div style="text-align: center; margin: 2rem 0;">
+        <h2 style="color: #2C3E50; font-family: 'Comic Sans MS', cursive; font-size: 2.5rem;">
+            🎯 What would you like to do today? 🎯
+        </h2>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Create navigation cards in columns
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        if st.button("📰\n\nRead News\n& Answer\nQuestions", key="nav_news", use_container_width=True):
+            st.session_state.section_selector = "📰 Read News & Answer Questions"
+    
+    with col2:
+        if st.button("🧮\n\nMath\nPractice", key="nav_math", use_container_width=True):
+            st.session_state.section_selector = "🧮 Math Practice"
+    
+    with col3:
+        if st.button("🔬\n\nScience\nTest", key="nav_science", use_container_width=True):
+            st.session_state.section_selector = "🔬 Science Test"
+    
+    with col4:
+        if st.button("📚\n\nELA\nTest", key="nav_ela", use_container_width=True):
+            st.session_state.section_selector = "📚 ELA Test"
+    
+    # Initialize section selector if not set
+    if 'section_selector' not in st.session_state:
+        st.session_state.section_selector = "📰 Read News & Answer Questions"
+    
+    section_selector = st.session_state.section_selector
+    
+    # Create custom tab selector that preserves state
+    article_id = article.get('id', f'article_{article_index}')
+    selected_tab = st.selectbox(
+        "Select Subject:",
+        options=list(range(len(tab_names))),
+        format_func=lambda x: tab_names[x],
+        index=st.session_state[active_tab_key],
+        key=f"tab_selector_{article_id}_{article_index}"
+    )
                     "Select Subject:",
                     options=list(range(len(tab_names))),
                     format_func=lambda x: tab_names[x],
@@ -949,13 +980,205 @@ def add_kid_friendly_styles():
     """, unsafe_allow_html=True)
 
 def main():
-    """Main application function"""
+    """Main application entry point"""
     st.set_page_config(
-        page_title="🌟 Knowledge R Us - Fun Learning!",
-        page_icon="🎮",
+        page_title="Knowledge R Us",
+        page_icon="🌟",
         layout="wide",
-        initial_sidebar_state="expanded"
+        initial_sidebar_state="collapsed"
     )
+    
+    # Add custom CSS for kid-friendly design
+    st.markdown("""
+    <style>
+    /* Main app styling */
+    .main .block-container {
+        padding-top: 2rem;
+        padding-bottom: 2rem;
+        max-width: 1200px;
+    }
+    
+    /* Header styling */
+    .main-header {
+        background: linear-gradient(135deg, #FF6B6B, #4ECDC4, #45B7D1, #96CEB4, #FFEAA7);
+        padding: 2rem;
+        border-radius: 20px;
+        text-align: center;
+        margin-bottom: 2rem;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+        animation: rainbow 3s ease-in-out infinite;
+    }
+    
+    @keyframes rainbow {
+        0%, 100% { background: linear-gradient(135deg, #FF6B6B, #4ECDC4, #45B7D1, #96CEB4, #FFEAA7); }
+        50% { background: linear-gradient(135deg, #4ECDC4, #45B7D1, #96CEB4, #FFEAA7, #FF6B6B); }
+    }
+    
+    .main-title {
+        font-size: 3rem;
+        font-weight: bold;
+        color: white;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        margin: 0;
+        font-family: 'Comic Sans MS', cursive;
+    }
+    
+    .main-subtitle {
+        font-size: 1.2rem;
+        color: white;
+        margin-top: 0.5rem;
+        text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+    }
+    
+    /* Navigation cards */
+    .nav-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 20px;
+        padding: 2rem;
+        margin: 1rem;
+        text-align: center;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        transition: all 0.3s ease;
+        cursor: pointer;
+        border: none;
+    }
+    
+    .nav-card:hover {
+        transform: translateY(-10px);
+        box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+    }
+    
+    .nav-card-icon {
+        font-size: 4rem;
+        margin-bottom: 1rem;
+        display: block;
+    }
+    
+    .nav-card-title {
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: white;
+        margin-bottom: 0.5rem;
+    }
+    
+    .nav-card-desc {
+        color: rgba(255,255,255,0.8);
+        font-size: 1rem;
+    }
+    
+    /* Question cards */
+    .question-card {
+        background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+        border-radius: 20px;
+        padding: 2rem;
+        margin: 1.5rem 0;
+        box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+        border: 3px solid #FFE082;
+    }
+    
+    .question-title {
+        font-size: 1.8rem;
+        color: #FF6B35;
+        font-weight: bold;
+        margin-bottom: 1rem;
+        font-family: 'Comic Sans MS', cursive;
+    }
+    
+    /* Answer buttons */
+    .answer-button {
+        background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+        border: 3px solid #4ECDC4;
+        border-radius: 15px;
+        padding: 1rem 2rem;
+        margin: 0.5rem;
+        font-size: 1.2rem;
+        font-weight: bold;
+        color: #2C3E50;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        width: 100%;
+        text-align: left;
+    }
+    
+    .answer-button:hover {
+        transform: scale(1.05);
+        box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        background: linear-gradient(135deg, #fed6e3 0%, #a8edea 100%);
+    }
+    
+    /* Success/Error messages */
+    .success-message {
+        background: linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%);
+        border-radius: 15px;
+        padding: 1.5rem;
+        margin: 1rem 0;
+        border-left: 5px solid #00b894;
+    }
+    
+    .error-message {
+        background: linear-gradient(135deg, #ffeaa7 0%, #fab1a0 100%);
+        border-radius: 15px;
+        padding: 1.5rem;
+        margin: 1rem 0;
+        border-left: 5px solid #e17055;
+    }
+    
+    /* Hide Streamlit elements */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    .stDeployButton {display:none;}
+    
+    /* Custom button styling */
+    .stButton > button {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        border-radius: 20px;
+        padding: 1.5rem 2rem;
+        font-size: 1.2rem;
+        font-weight: bold;
+        transition: all 0.3s ease;
+        height: 120px;
+        white-space: pre-line;
+        line-height: 1.3;
+        font-family: 'Comic Sans MS', cursive;
+    }
+    
+    .stButton > button:hover {
+        transform: translateY(-5px) scale(1.05);
+        box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+        background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+    }
+    
+    /* Navigation button specific styling */
+    .stButton > button[key*="nav_"] {
+        background: linear-gradient(135deg, #FF6B6B, #4ECDC4);
+        animation: pulse 2s infinite;
+    }
+    
+    @keyframes pulse {
+        0% { box-shadow: 0 0 0 0 rgba(78, 205, 196, 0.7); }
+        70% { box-shadow: 0 0 0 10px rgba(78, 205, 196, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(78, 205, 196, 0); }
+    }
+    
+    /* Progress indicators */
+    .progress-container {
+        background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+        border-radius: 20px;
+        padding: 1.5rem;
+        margin: 1rem 0;
+        text-align: center;
+    }
+    
+    .score-display {
+        font-size: 2rem;
+        font-weight: bold;
+        color: #2C3E50;
+        margin: 0.5rem 0;
+    }
+    </style>
+    """, unsafe_allow_html=True)
     
     # Add kid-friendly styles
     add_kid_friendly_styles()
@@ -1324,12 +1547,11 @@ def display_test_questions(questions: List[Dict], subject: str):
 
 def display_math_section():
     """Display dedicated math practice section"""
-    # Fun math header
+    # Main app header with animated rainbow background
     st.markdown("""
-    <div style="text-align: center; padding: 25px; background: linear-gradient(135deg, #4ECDC4, #44A08D); border-radius: 25px; margin: 20px 0;">
-        <div style="font-size: 4em; margin: 10px 0;">🧮</div>
-        <h1 style="color: white; font-size: 3em; margin: 10px 0;">Math Magic Time!</h1>
-        <p style="color: white; font-size: 1.3em;">✨ Let's solve some awesome math problems! ✨</p>
+    <div class="main-header">
+        <h1 class="main-title">🌟 Knowledge R Us 🌟</h1>
+        <p class="main-subtitle">Learn about the world through fun news and activities!</p>
     </div>
     """, unsafe_allow_html=True)
     
@@ -1397,61 +1619,147 @@ def display_math_section():
         math_questions = math_generator.generate_math_questions(age_group, math_difficulty, num_questions)
         
         if math_questions:
-            if is_test_mode:
+            # Progress and score display
+            answered_count = len(st.session_state.get('answered_math_questions', set()))
+            total_questions = len(math_questions)
+            progress_percent = (answered_count / total_questions) * 100
+            
+            st.markdown(f"""
+            <div class="progress-container">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <div>
+                        <div class="score-display">🏆 Score: {st.session_state.score}</div>
+                        <div style="color: #2C3E50; font-size: 1.1rem;">Keep going! You're doing great!</div>
+                    </div>
+                    <div style="text-align: right;">
+                        <div style="font-size: 1.5rem; font-weight: bold; color: #2C3E50;">
+                            📊 Progress: {answered_count}/{total_questions}
+                        </div>
+                        <div style="background: #E0E0E0; border-radius: 10px; height: 20px; width: 200px; margin-top: 0.5rem;">
+                            <div style="background: linear-gradient(135deg, #4ECDC4, #44A08D); height: 100%; border-radius: 10px; width: {progress_percent}%; transition: width 0.5s ease;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Check if this is a test mode (20 questions)
+            if len(math_questions) == 20:
                 st.markdown("""
-                <div style="background: linear-gradient(135deg, #FF6B6B, #4ECDC4); 
-                            border-radius: 15px; padding: 20px; margin: 15px 0; text-align: center;">
-                    <h2 style="color: white; margin: 0; font-family: 'Comic Sans MS', cursive;">
-                        📝 Math Test Mode - 20 Questions!
+                <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                            padding: 1.5rem; border-radius: 15px; text-align: center; margin-bottom: 2rem;">
+                    <h2 style="color: white; margin: 0; font-size: 2rem;">
+                        🧮 20-Question Math Challenge! 🧮
                     </h2>
-                    <p style="color: white; margin: 10px 0;">Take your time and do your best! 🌟</p>
+                    <p style="color: rgba(255,255,255,0.9); margin: 0.5rem 0 0 0; font-size: 1.1rem;">
+                        Test your math skills with these challenging problems!
+                    </p>
                 </div>
                 """, unsafe_allow_html=True)
             else:
-                st.subheader("🤔 Practice Problems")
+                st.markdown("""
+                <div style="text-align: center; margin: 1.5rem 0;">
+                    <h2 style="color: #2C3E50; font-family: 'Comic Sans MS', cursive; font-size: 2rem;">
+                        🤔 Practice Problems 🤔
+                    </h2>
+                </div>
+                """, unsafe_allow_html=True)
             
             for i, question in enumerate(math_questions):
-                with st.container():
-                    st.markdown(f"**Problem {i+1}:**")
-                    question_key = f"math_q_{i}"
-                    attempt_key = f"math_attempts_{i}"
+                # Create beautiful question card
+                st.markdown(f"""
+                <div class="question-card">
+                    <div class="question-title">
+                        🧮 Problem {i+1}
+                    </div>
+                    <div style="font-size: 1.3rem; color: #2C3E50; margin-bottom: 1.5rem; line-height: 1.6;">
+                        {question["question"]}
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                question_key = f"math_q_{i}"
+                attempt_key = f"math_attempts_{i}"
+                feedback_key = f"math_feedback_{i}"
+                
+                # Initialize attempt counter
+                if attempt_key not in st.session_state:
+                    st.session_state[attempt_key] = 0
                     
-                    # Initialize attempt counter
-                    if attempt_key not in st.session_state:
-                        st.session_state[attempt_key] = 0
+                # Only show interactive elements if question hasn't been answered correctly
+                if question_key not in st.session_state.get('answered_math_questions', set()):
+                    st.markdown("""
+                    <div style="text-align: center; margin: 1.5rem 0;">
+                        <h3 style="color: #FF6B35; font-family: 'Comic Sans MS', cursive; font-size: 1.5rem;">
+                            🤔 Choose your answer:
+                        </h3>
+                    </div>
+                    """, unsafe_allow_html=True)
                     
-                    # Show question
-                    st.write(question["question"])
-                    
-                    # Only show interactive elements if question hasn't been answered correctly
-                    if question_key not in st.session_state.get('answered_math_questions', set()):
-                        # Create radio button for answers
-                        answer = st.radio(
-                            "Choose your answer:",
-                            question["options"],
-                            key=f"radio_{question_key}",
-                            index=None
+                    # Create answer buttons in a grid
+                    if question.get("question_type") == "fill_in_blank" and "options" not in question:
+                        # Text input for fill-in-the-blank
+                        answer = st.text_input(
+                            "✏️ Type your answer:",
+                            key=f"text_{question_key}",
+                            placeholder="Enter your answer here...",
+                            help="Type the number that answers the question"
                         )
+                    else:
+                        # Multiple choice with beautiful buttons
+                        answer = None
+                        cols = st.columns(2)
+                        for idx, option in enumerate(question["options"]):
+                            col = cols[idx % 2]
+                            with col:
+                                if st.button(
+                                    f"🔤 {chr(65 + idx)}) {option}",
+                                    key=f"answer_{question_key}_{idx}",
+                                    use_container_width=True
+                                ):
+                                    answer = option
+                                    st.session_state[f"selected_answer_{question_key}"] = option
                         
-                        # Check answer button
-                        if st.button(f"Check Answer", key=f"check_math_{i}"):
-                            if answer is None:
-                                st.warning("⚠️ Please select an answer first!")
+                        # Show selected answer
+                        if f"selected_answer_{question_key}" in st.session_state:
+                            answer = st.session_state[f"selected_answer_{question_key}"]
+                            st.success(f"✅ You selected: **{answer}**")
+                        
+                    # Check answer button with beautiful styling
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    col1, col2, col3 = st.columns([1, 2, 1])
+                    with col2:
+                        if st.button("🎯 Check My Answer!", key=f"check_math_{i}", use_container_width=True):
+                            if answer is None or answer == "":
+                                st.error("⚠️ Please select or type an answer first!")
                             else:
                                 st.session_state[attempt_key] += 1
                                 
                                 if 'answered_math_questions' not in st.session_state:
                                     st.session_state.answered_math_questions = set()
                                 
-                                if answer == question["correct"]:
-                                    # Correct answer
+                                if str(answer) == str(question["correct"]):
+                                    # Correct answer with celebration
                                     points = 10 if st.session_state[attempt_key] == 1 else 5
-                                    st.success(f"🎉 Correct! {question['explanation']}")
-                                    st.info(f"💡 **Why this is right:** {question['reasoning']}")
+                                    st.markdown("""
+                                    <div class="success-message">
+                                        <h3 style="color: #00b894; margin: 0; font-size: 1.5rem;">
+                                            🎉 Fantastic! You got it right! 🎉
+                                        </h3>
+                                        <p style="margin: 0.5rem 0; font-size: 1.1rem;">
+                                            """ + question['explanation'] + """
+                                        </p>
+                                        <p style="margin: 0; font-style: italic; color: #00b894;">
+                                            💡 """ + question.get('reasoning', '') + """
+                                        </p>
+                                    </div>
+                                    """, unsafe_allow_html=True)
+                                    
                                     feedback = "Correct!"
                                     st.session_state[feedback_key] = feedback
                                     st.session_state.answered_questions.add(question_key)
                                     st.session_state.score += points
+                                    st.balloons()  # Celebration animation!
                                     
                                     # Update progress for authenticated users (math-specific)
                                     if hasattr(st.session_state, 'selected_kid') and hasattr(st.session_state, 'profile_manager'):
