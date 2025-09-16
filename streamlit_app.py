@@ -455,7 +455,7 @@ def display_article_with_questions(article: Dict, age_group: str, article_index:
                         st.session_state[attempt_key] = 0
                     
                     # Display question with type-specific styling
-                    question_type = question.get('question_type', 'multiple_choice')
+                    question_type = question.get('question_type', question.get('type', 'multiple_choice'))
                     type_emoji = {
                         'multiple_choice': '🔤',
                         'true_false': '✅❌',

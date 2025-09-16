@@ -264,17 +264,19 @@ Return ONLY a JSON object with this exact structure:
             if complexity == "simple":
                 return {
                     "type": "math",
+                    "question_type": "multiple_choice",
                     "question": f"The article mentions {num}. What is {num} + 5?",
                     "options": [str(num+3), str(num+4), str(num+5), str(num+6)],
                     "correct": str(num+5),
                     "hint": f"Add 5 to {num}",
                     "explanation": f"{num} + 5 = {num+5}",
                     "reasoning": "Addition helps us find totals.",
-                    "wrong_explanation": f"Count up from {num}: add 5 more."
+                    "wrong_explanation": "Remember to add carefully."
                 }
             elif complexity == "intermediate":
                 return {
                     "type": "math",
+                    "question_type": "multiple_choice",
                     "question": f"If the article mentions {num}%, what fraction is this?",
                     "options": [f"{num}/50", f"{num}/100", f"{num}/200", f"{num}/10"],
                     "correct": f"{num}/100",
@@ -287,6 +289,7 @@ Return ONLY a JSON object with this exact structure:
                 ratio = round(num * 1.5, 1)
                 return {
                     "type": "math",
+                    "question_type": "multiple_choice",
                     "question": f"If {num} increases by 50%, what is the new value?",
                     "options": [str(num), str(ratio-0.5), str(ratio), str(ratio+0.5)],
                     "correct": str(ratio),
@@ -298,6 +301,7 @@ Return ONLY a JSON object with this exact structure:
             else:  # college_prep
                 return {
                     "type": "math",
+                    "question_type": "multiple_choice",
                     "question": f"What is the statistical significance of the {num}% mentioned in the study?",
                     "options": ["It's always significant", "Depends on sample size and p-value", "Only if >50%", "Not determinable"],
                     "correct": "Depends on sample size and p-value",
@@ -311,6 +315,7 @@ Return ONLY a JSON object with this exact structure:
         if complexity == "simple":
             return {
                 "type": "math",
+                "question_type": "multiple_choice",
                 "question": "What is 7 + 8?",
                 "options": ["14", "15", "16", "17"],
                 "correct": "15",
@@ -322,6 +327,7 @@ Return ONLY a JSON object with this exact structure:
         else:
             return {
                 "type": "math",
+                "question_type": "multiple_choice",
                 "question": "What is 15% of 200?",
                 "options": ["25", "30", "35", "40"],
                 "correct": "30",
@@ -336,6 +342,7 @@ Return ONLY a JSON object with this exact structure:
         if complexity == "simple":
             return {
                 "type": "science",
+                "question_type": "multiple_choice",
                 "question": "What do scientists do to learn about the world?",
                 "options": ["Guess answers", "Do experiments", "Make up stories", "Copy others"],
                 "correct": "Do experiments",
@@ -347,6 +354,7 @@ Return ONLY a JSON object with this exact structure:
         elif complexity == "intermediate":
             return {
                 "type": "science",
+                "question_type": "multiple_choice",
                 "question": "What is the first step in the scientific method?",
                 "options": ["Do experiment", "Ask a question", "Write conclusion", "Tell others"],
                 "correct": "Ask a question",
@@ -358,6 +366,7 @@ Return ONLY a JSON object with this exact structure:
         elif complexity == "advanced":
             return {
                 "type": "science",
+                "question_type": "multiple_choice",
                 "question": "Why is peer review important in scientific research?",
                 "options": ["To make friends", "To check accuracy and validity", "To copy ideas", "To save time"],
                 "correct": "To check accuracy and validity",
@@ -369,13 +378,14 @@ Return ONLY a JSON object with this exact structure:
         else:  # college_prep
             return {
                 "type": "science",
-                "question": "How does this research contribute to the broader scientific literature?",
-                "options": ["It doesn't matter", "It builds on previous studies and adds new knowledge", "It replaces all old research", "It's just opinion"],
-                "correct": "It builds on previous studies and adds new knowledge",
-                "hint": "Science is cumulative and builds on itself",
-                "explanation": "Scientific research contributes to our collective understanding by building on and extending previous work.",
-                "reasoning": "Science advances through incremental contributions to knowledge.",
-                "wrong_explanation": "Look for how this study relates to and extends previous research."
+                "question_type": "multiple_choice",
+                "question": "How does the reproducibility crisis affect scientific validity?",
+                "options": ["It doesn't matter", "It undermines confidence in research", "It makes science faster", "It reduces costs"],
+                "correct": "It undermines confidence in research",
+                "hint": "Think about trust in scientific findings",
+                "explanation": "The reproducibility crisis challenges the reliability of scientific research.",
+                "reasoning": "Reproducible results are fundamental to scientific credibility.",
+                "wrong_explanation": "Consider how failed replication affects trust in scientific conclusions."
             }
     
     def _generate_fallback_ela(self, title: str, complexity: str) -> Dict:
@@ -383,17 +393,19 @@ Return ONLY a JSON object with this exact structure:
         if complexity == "simple":
             return {
                 "type": "ela",
-                "question": f"What is the main topic of '{title}'?",
-                "options": ["Sports", "News and information", "Cartoons", "Games"],
-                "correct": "News and information",
-                "hint": "Think about what type of article this is",
-                "explanation": "This is a news article that gives us information about real events!",
-                "reasoning": "News articles inform us about what's happening in the world.",
-                "wrong_explanation": "Look at the title and content - this reports real information."
+                "question_type": "multiple_choice",
+                "question": "What is the main idea of a story?",
+                "options": ["The pictures", "What it's mostly about", "The first word", "How long it is"],
+                "correct": "What it's mostly about",
+                "hint": "Think about the most important part",
+                "explanation": "The main idea tells us what the story is mostly about!",
+                "reasoning": "Main ideas help us understand the central message.",
+                "wrong_explanation": "Look for what the whole story is trying to tell you."
             }
         elif complexity == "intermediate":
             return {
                 "type": "ela",
+                "question_type": "multiple_choice",
                 "question": "What is the author's purpose in writing this article?",
                 "options": ["To entertain", "To inform readers", "To sell something", "To tell jokes"],
                 "correct": "To inform readers",
@@ -405,6 +417,7 @@ Return ONLY a JSON object with this exact structure:
         elif complexity == "advanced":
             return {
                 "type": "ela",
+                "question_type": "multiple_choice",
                 "question": "What type of evidence does the author use to support their claims?",
                 "options": ["Personal opinions only", "Scientific data and expert quotes", "Random guesses", "Social media posts"],
                 "correct": "Scientific data and expert quotes",
@@ -416,6 +429,7 @@ Return ONLY a JSON object with this exact structure:
         else:  # college_prep
             return {
                 "type": "ela",
+                "question_type": "multiple_choice",
                 "question": "How might the author's choice of sources affect the article's credibility and perspective?",
                 "options": ["Sources don't matter", "Different sources provide different viewpoints and credibility levels", "All sources are equal", "Only famous people matter"],
                 "correct": "Different sources provide different viewpoints and credibility levels",
