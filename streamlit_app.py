@@ -11,6 +11,7 @@ import logging
 from datetime import datetime
 import feedparser
 import re
+import random
 from typing import Dict, List
 # Import authentication system
 from auth_system import UserProfileManager, show_login_page, show_profile_selection, show_kid_dashboard
@@ -706,7 +707,6 @@ def display_article_with_questions(article: Dict, age_group: str, article_index:
                             "🌈 Wonderful! You're brilliant!",
                             "🚀 Outstanding! You rock!"
                         ]
-                        import random
                         celebration = random.choice(celebration_messages)
                         
                         star_message = "⭐" * min(points // 2, 5)
@@ -782,9 +782,9 @@ def display_article_with_questions(article: Dict, age_group: str, article_index:
                                 kid_id = st.session_state.selected_kid['kid_id']
                                 question_subject = question.get('type', 'general')
                                 
-                                # Update subject-specific progress (wrong answer)
-                                st.session_state.profile_manager.update_subject_progress(
-                                    kid_id, question_subject, False, 0
+                                # Update progress (wrong answer - no points)
+                                st.session_state.profile_manager.update_kid_progress(
+                                    kid_id, score_increment=0, questions_increment=1
                                 )
                                 
                                 # Also update general progress for backward compatibility
@@ -1722,7 +1722,7 @@ def display_social_studies_questions(questions, lesson_key):
         
         # Question container
         with st.container():
-            st.markdown(f"""<div style="background: white; padding: 20px; border-radius: 15px; margin: 15px 0; border-left: 5px solid #8B4513;">""")
+            st.markdown(f"""<div style="background: white; padding: 20px; border-radius: 15px; margin: 15px 0; border-left: 5px solid #8B4513;">""", unsafe_allow_html=True)
             
             # Question status and type indicator
             question_type = question.get('type', 'multiple_choice')
@@ -1734,9 +1734,9 @@ def display_social_studies_questions(questions, lesson_key):
             }.get(question_type, '❓')
             
             if question_key in st.session_state.answered_ss_questions:
-                st.markdown(f"**Question {i+1}:** ✅ {type_emoji} **COMPLETED**")
+                st.markdown(f"**Question {i+1}:** ✅ **COMPLETED**")
             elif st.session_state[attempt_key] > 0:
-                st.markdown(f"**Question {i+1}:** ❌ {type_emoji} **TRY AGAIN**")
+                st.markdown(f"**Question {i+1}:** ❌ **TRY AGAIN**")
             else:
                 st.markdown(f"**Question {i+1}:** {type_emoji}")
             
@@ -1820,7 +1820,6 @@ def display_social_studies_questions(questions, lesson_key):
                                     "🏆 Perfect! You understand the lesson!",
                                     "🌟 Brilliant! You've mastered this topic!"
                                 ]
-                                import random
                                 celebration = random.choice(celebration_messages)
                                 
                                 st.success(f"{celebration} (+{points} points!)")
@@ -1833,11 +1832,10 @@ def display_social_studies_questions(questions, lesson_key):
                                 
                                 # Update kid progress if authenticated
                                 if hasattr(st.session_state, 'selected_kid') and hasattr(st.session_state, 'profile_manager'):
-                                    st.session_state.profile_manager.update_subject_progress(
+                                    st.session_state.profile_manager.update_kid_progress(
                                         st.session_state.selected_kid['kid_id'],
-                                        'social_studies',
-                                        correct=True,
-                                        points=points
+                                        score_increment=points,
+                                        questions_increment=1
                                     )
                                 
                                 st.balloons()
@@ -1865,11 +1863,10 @@ def display_social_studies_questions(questions, lesson_key):
                                     
                                     # Update progress (no points for wrong answer)
                                     if hasattr(st.session_state, 'selected_kid') and hasattr(st.session_state, 'profile_manager'):
-                                        st.session_state.profile_manager.update_subject_progress(
+                                        st.session_state.profile_manager.update_kid_progress(
                                             st.session_state.selected_kid['kid_id'],
-                                            'social_studies', 
-                                            correct=False,
-                                            points=0
+                                            score_increment=0,
+                                            questions_increment=1
                                         )
                                 else:
                                     st.error("❌ Not quite right. Try again!")
@@ -2303,9 +2300,9 @@ def display_math_section():
                                     if hasattr(st.session_state, 'selected_kid') and hasattr(st.session_state, 'profile_manager'):
                                         kid_id = st.session_state.selected_kid['kid_id']
                                         
-                                        # Update math-specific progress
-                                        st.session_state.profile_manager.update_subject_progress(
-                                            kid_id, 'math', True, points
+                                        # Update math progress
+                                        st.session_state.profile_manager.update_kid_progress(
+                                            kid_id, score_increment=points, questions_increment=1
                                         )
                                         
                                         # Also update general progress for backward compatibility
