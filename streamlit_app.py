@@ -1189,9 +1189,13 @@ def main():
         from streamlit_data_storage import StreamlitDataManager
         st.session_state.profile_manager = StreamlitDataManager()
     
-    # Initialize answered questions set
+    # Initialize session state variables
     if 'answered_questions' not in st.session_state:
         st.session_state.answered_questions = set()
+    if 'score' not in st.session_state:
+        st.session_state.score = 0
+    if 'questions_answered' not in st.session_state:
+        st.session_state.questions_answered = 0
     
     # Remove any old data manager references
     if 'data_manager' in st.session_state:
@@ -1548,6 +1552,16 @@ def display_test_questions(questions: List[Dict], subject: str):
 
 def display_math_section():
     """Display dedicated math practice section"""
+    # Initialize session state variables if not present
+    if 'score' not in st.session_state:
+        st.session_state.score = 0
+    if 'questions_answered' not in st.session_state:
+        st.session_state.questions_answered = 0
+    if 'answered_questions' not in st.session_state:
+        st.session_state.answered_questions = set()
+    if 'answered_math_questions' not in st.session_state:
+        st.session_state.answered_math_questions = set()
+    
     # Main app header with animated rainbow background
     st.markdown("""
     <div class="main-header">
