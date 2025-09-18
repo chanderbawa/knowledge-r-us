@@ -439,6 +439,13 @@ def display_article_with_questions(article: Dict, age_group: str, article_index:
         if st.button("📚\n\nELA\nTest", key="nav_ela", use_container_width=True):
             st.session_state.section_selector = "📚 ELA Test"
     
+    # Add Social Studies button in a new row
+    st.markdown("<br>", unsafe_allow_html=True)
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        if st.button("🏛️\n\nSocial Studies\nModule 5", key="nav_social_studies", use_container_width=True):
+            st.session_state.section_selector = "🏛️ Social Studies Module 5"
+    
     # Initialize section selector if not set
     if 'section_selector' not in st.session_state:
         st.session_state.section_selector = "📰 Read News & Answer Questions"
@@ -1264,7 +1271,7 @@ def main():
     </div>
     """, unsafe_allow_html=True)
     
-    col1, col2 = st.columns(2, gap="large")
+    col1, col2, col3 = st.columns(3, gap="large")
     
     with col1:
         st.markdown("""
@@ -1292,11 +1299,26 @@ def main():
             st.balloons()
             st.rerun()
     
+    with col3:
+        st.markdown("""
+        <div style="text-align: center; padding: 20px; background: linear-gradient(135deg, #8B4513, #D2691E); border-radius: 25px; margin: 10px;">
+            <div class="big-emoji">🏛️</div>
+            <h3 style="color: white; margin: 15px 0;">Social Studies!</h3>
+            <p style="color: white; font-size: 1.1em;">📖 Module 5: Immigration & Cities!</p>
+        </div>
+        """, unsafe_allow_html=True)
+        if st.button("🎓 Study History!", key="social_studies_button", use_container_width=True):
+            st.session_state.learning_mode = "social_studies"
+            st.balloons()
+            st.rerun()
+    
     # Display selected section
     if st.session_state.get('learning_mode') == "math":
         display_math_section()
     elif st.session_state.get('learning_mode') == "news":
         display_news_articles()
+    elif st.session_state.get('learning_mode') == "social_studies":
+        display_social_studies_module()
     else:
         # Fun welcome screen with animations
         st.markdown("""
@@ -1307,6 +1329,258 @@ def main():
             <div style="font-size: 2em; margin: 20px 0;">🚀 📚 🧮 🎮</div>
         </div>
         """, unsafe_allow_html=True)
+
+def display_social_studies_module():
+    """Display Social Studies Module 5: Immigration and Cities"""
+    from social_studies_questions import get_social_studies_questions
+    
+    st.markdown("""
+    <div style="text-align: center; padding: 25px; background: linear-gradient(135deg, #8B4513, #D2691E); border-radius: 25px; margin: 20px 0;">
+        <div style="font-size: 4em; margin: 10px 0;">🏛️</div>
+        <h1 style="color: white; font-size: 3em; margin: 10px 0;">Social Studies Module 5</h1>
+        <p style="color: white; font-size: 1.3em;">📖 Immigration and Cities in America 🇺🇸</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Get kid's info for age-appropriate content
+    kid = st.session_state.selected_kid
+    age_group = kid['age_group']
+    
+    # Navigation tabs for different topics
+    tab1, tab2, tab3, tab4 = st.tabs(["🚢 Immigration", "🏙️ Cities & Growth", "🏭 Industrial Revolution", "📚 Review Quiz"])
+    
+    with tab1:
+        st.markdown("### 🚢 Immigration to America")
+        display_immigration_content(age_group)
+    
+    with tab2:
+        st.markdown("### 🏙️ Cities and Urban Growth")
+        display_cities_content(age_group)
+    
+    with tab3:
+        st.markdown("### 🏭 Industrial Revolution")
+        display_industrial_content(age_group)
+    
+    with tab4:
+        st.markdown("### 📚 Module 5 Review Quiz")
+        display_social_studies_quiz(age_group)
+
+def display_immigration_content(age_group):
+    """Display immigration content with interactive questions"""
+    from social_studies_questions import get_social_studies_questions
+    
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #E3F2FD, #BBDEFB); padding: 20px; border-radius: 15px; margin: 15px 0;">
+        <h4>🌍 People Coming to America</h4>
+        <p>Throughout history, millions of people have moved to America from other countries. This is called <strong>immigration</strong>. 
+        People came for many reasons: to find jobs, escape danger, or start new lives with more freedom.</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Get immigration-related questions
+    questions = get_social_studies_questions()
+    immigration_questions = [q for q in questions if 'immigration' in q['topic'].lower() or 'immigrant' in q['topic'].lower()]
+    
+    if immigration_questions:
+        st.markdown("#### 🤔 Test Your Knowledge!")
+        display_interactive_question(immigration_questions[0], "immigration")
+
+def display_cities_content(age_group):
+    """Display cities and urban growth content"""
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #F3E5F5, #E1BEE7); padding: 20px; border-radius: 15px; margin: 15px 0;">
+        <h4>🏙️ Growing Cities</h4>
+        <p>As more people came to America and factories were built, cities grew very quickly. People moved from farms to cities 
+        to work in factories. This created both opportunities and challenges for city life.</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Get cities-related questions
+    from social_studies_questions import get_social_studies_questions
+    questions = get_social_studies_questions()
+    cities_questions = [q for q in questions if 'city' in q['topic'].lower() or 'urban' in q['topic'].lower()]
+    
+    if cities_questions:
+        st.markdown("#### 🤔 Test Your Knowledge!")
+        display_interactive_question(cities_questions[0], "cities")
+
+def display_industrial_content(age_group):
+    """Display industrial revolution content"""
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #FFF3E0, #FFE0B2); padding: 20px; border-radius: 15px; margin: 15px 0;">
+        <h4>🏭 The Industrial Revolution</h4>
+        <p>The Industrial Revolution was a time when many new machines and factories were invented. This changed how people 
+        worked and lived. Instead of making things by hand, machines could make things faster and cheaper.</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Get industrial-related questions
+    from social_studies_questions import get_social_studies_questions
+    questions = get_social_studies_questions()
+    industrial_questions = [q for q in questions if 'industrial' in q['topic'].lower() or 'factory' in q['topic'].lower()]
+    
+    if industrial_questions:
+        st.markdown("#### 🤔 Test Your Knowledge!")
+        display_interactive_question(industrial_questions[0], "industrial")
+
+def display_social_studies_quiz(age_group):
+    """Display comprehensive quiz for Module 5"""
+    from social_studies_questions import get_social_studies_questions
+    
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #E8F5E8, #C8E6C9); padding: 20px; border-radius: 15px; margin: 15px 0;">
+        <h4>📚 Complete Module 5 Review</h4>
+        <p>Ready to test everything you've learned about Immigration and Cities? Take this comprehensive quiz!</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Initialize quiz state
+    if 'social_studies_quiz_active' not in st.session_state:
+        st.session_state.social_studies_quiz_active = False
+        st.session_state.social_studies_current_question = 0
+        st.session_state.social_studies_score = 0
+        st.session_state.social_studies_answers = []
+    
+    questions = get_social_studies_questions()
+    
+    if not st.session_state.social_studies_quiz_active:
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("🎯 Start Module 5 Quiz", key="start_social_studies_quiz"):
+                st.session_state.social_studies_quiz_active = True
+                st.session_state.social_studies_current_question = 0
+                st.session_state.social_studies_score = 0
+                st.session_state.social_studies_answers = []
+                st.rerun()
+        
+        with col2:
+            st.info(f"📊 Total Questions: {len(questions)}")
+    else:
+        display_quiz_interface(questions, "social_studies")
+
+def display_interactive_question(question, topic_key):
+    """Display a single interactive question"""
+    question_key = f"{topic_key}_question"
+    
+    st.markdown(f"**Question:** {question['question']}")
+    
+    # Create unique keys for each option
+    selected_option = st.radio(
+        "Choose your answer:",
+        question['options'],
+        key=f"{question_key}_radio"
+    )
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if st.button("Submit Answer", key=f"{question_key}_submit"):
+            if selected_option == question['correct_answer']:
+                st.success("🎉 Correct! Great job!")
+                st.balloons()
+            else:
+                st.error(f"❌ Not quite right. The correct answer is: {question['correct_answer']}")
+            
+            # Show explanation if available
+            if question.get('explanation'):
+                st.info(f"💡 **Explanation:** {question['explanation']}")
+    
+    with col2:
+        if st.button("Next Question", key=f"{question_key}_next"):
+            st.rerun()
+
+def display_quiz_interface(questions, quiz_type):
+    """Display quiz interface for any subject"""
+    current_q = st.session_state[f"{quiz_type}_current_question"]
+    
+    if current_q < len(questions):
+        question = questions[current_q]
+        
+        # Progress bar
+        progress = (current_q + 1) / len(questions)
+        st.progress(progress)
+        st.markdown(f"**Question {current_q + 1} of {len(questions)}**")
+        
+        # Display question
+        st.markdown(f"### {question['question']}")
+        
+        # Answer options
+        selected_answer = st.radio(
+            "Choose your answer:",
+            question['options'],
+            key=f"{quiz_type}_q{current_q}"
+        )
+        
+        if st.button("Submit Answer", key=f"{quiz_type}_submit_{current_q}"):
+            # Check answer
+            is_correct = selected_answer == question['correct_answer']
+            
+            if is_correct:
+                st.success("🎉 Correct!")
+                st.session_state[f"{quiz_type}_score"] += 1
+            else:
+                st.error(f"❌ Incorrect. The correct answer is: {question['correct_answer']}")
+            
+            # Show explanation
+            if question.get('explanation'):
+                st.info(f"💡 **Explanation:** {question['explanation']}")
+            
+            # Store answer
+            st.session_state[f"{quiz_type}_answers"].append({
+                'question': question['question'],
+                'selected': selected_answer,
+                'correct': question['correct_answer'],
+                'is_correct': is_correct
+            })
+            
+            # Move to next question
+            st.session_state[f"{quiz_type}_current_question"] += 1
+            
+            if st.session_state[f"{quiz_type}_current_question"] < len(questions):
+                if st.button("Next Question", key=f"{quiz_type}_next_{current_q}"):
+                    st.rerun()
+            else:
+                st.rerun()
+    else:
+        # Quiz completed
+        display_quiz_results(questions, quiz_type)
+
+def display_quiz_results(questions, quiz_type):
+    """Display quiz results"""
+    score = st.session_state[f"{quiz_type}_score"]
+    total = len(questions)
+    percentage = (score / total) * 100
+    
+    st.markdown("""
+    <div style="text-align: center; padding: 30px; background: linear-gradient(135deg, #4CAF50, #45a049); border-radius: 25px; margin: 20px 0;">
+        <div style="font-size: 4em; margin: 10px 0;">🎊</div>
+        <h2 style="color: white; font-size: 2.5em;">Quiz Complete!</h2>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.markdown(f"""
+    <div style="text-align: center; padding: 20px; background: rgba(255,255,255,0.1); border-radius: 15px; margin: 15px 0;">
+        <h3>Your Score: {score}/{total} ({percentage:.1f}%)</h3>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Performance feedback
+    if percentage >= 90:
+        st.success("🌟 Excellent work! You're a Social Studies superstar!")
+    elif percentage >= 80:
+        st.success("🎉 Great job! You have a solid understanding!")
+    elif percentage >= 70:
+        st.info("👍 Good work! Keep studying to improve even more!")
+    else:
+        st.warning("📚 Keep practicing! Review the material and try again!")
+    
+    # Restart option
+    if st.button("🔄 Take Quiz Again", key=f"{quiz_type}_restart"):
+        st.session_state[f"{quiz_type}_quiz_active"] = False
+        st.session_state[f"{quiz_type}_current_question"] = 0
+        st.session_state[f"{quiz_type}_score"] = 0
+        st.session_state[f"{quiz_type}_answers"] = []
+        st.rerun()
 
 def display_science_test():
     """Display 20-question science test"""
@@ -1358,6 +1632,255 @@ def display_science_test():
             """, unsafe_allow_html=True)
             
             display_test_questions(questions, "science")
+
+def display_social_studies_module():
+    """Display Social Studies Module 5 questions based on textbook content"""
+    from social_studies_questions import get_all_questions
+    
+    st.markdown("""
+    <div style="text-align: center; padding: 20px; background: linear-gradient(135deg, #8B4513, #D2691E); border-radius: 15px; margin: 20px 0;">
+        <h1 style="color: white; font-size: 2.5em; margin: 10px 0;">🏛️ Social Studies Module 5 🏛️</h1>
+        <h2 style="color: white; font-size: 1.8em; margin: 10px 0;">Immigration and Urban Life (1880s-1920s)</h2>
+        <p style="color: white; font-size: 1.2em;">📖 Questions based strictly on your Module 5 Textbook</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Get all social studies questions
+    all_ss_questions = get_all_questions()
+    
+    # Create tabs for different lessons
+    lesson_tabs = st.tabs(["📚 Lesson 1: Immigration", "🏙️ Lesson 2: City Growth", "🏠 Lesson 3: City Life", "🎯 Review Questions"])
+    
+    # Lesson 1: A New Wave of Immigration
+    with lesson_tabs[0]:
+        st.subheader("📚 Lesson 1: A New Wave of Immigration")
+        st.info("🎯 **Learning Goals:** Understand immigration patterns, Ellis Island, and challenges faced by new immigrants")
+        
+        lesson1_questions = all_ss_questions.get("lesson_1", {}).get("questions", [])
+        display_social_studies_questions(lesson1_questions, "lesson_1")
+    
+    # Lesson 2: The Growth of Cities
+    with lesson_tabs[1]:
+        st.subheader("🏙️ Lesson 2: The Growth of Cities")
+        st.info("🎯 **Learning Goals:** Learn about urban growth, new technologies, and mass culture")
+        
+        lesson2_questions = all_ss_questions.get("lesson_2", {}).get("questions", [])
+        display_social_studies_questions(lesson2_questions, "lesson_2")
+    
+    # Lesson 3: City Life
+    with lesson_tabs[2]:
+        st.subheader("🏠 Lesson 3: City Life")
+        st.info("🎯 **Learning Goals:** Explore urban problems, tenements, and reform movements")
+        
+        lesson3_questions = all_ss_questions.get("lesson_3", {}).get("questions", [])
+        display_social_studies_questions(lesson3_questions, "lesson_3")
+    
+    # Comprehensive Review
+    with lesson_tabs[3]:
+        st.subheader("🎯 Module 5 Comprehensive Review")
+        st.info("🎯 **Assessment Prep:** Mixed questions covering all three lessons")
+        
+        review_questions = all_ss_questions.get("comprehensive_review", {}).get("questions", [])
+        display_social_studies_questions(review_questions, "comprehensive_review")
+
+def display_social_studies_questions(questions, lesson_key):
+    """Display social studies questions with interactive elements"""
+    if not questions:
+        st.warning("No questions available for this section.")
+        return
+    
+    # Initialize session state for social studies
+    if 'answered_ss_questions' not in st.session_state:
+        st.session_state.answered_ss_questions = set()
+    if 'ss_score' not in st.session_state:
+        st.session_state.ss_score = 0
+    if 'ss_questions_answered' not in st.session_state:
+        st.session_state.ss_questions_answered = 0
+    
+    # Display progress
+    answered_count = len([q for q in questions if q['id'] in st.session_state.answered_ss_questions])
+    progress = answered_count / len(questions) if questions else 0
+    
+    st.markdown(f"""
+    <div style="background: linear-gradient(135deg, #E8F5E8, #C8E6C9); padding: 15px; border-radius: 10px; margin: 10px 0;">
+        <h4 style="color: #2E7D32; margin: 0;">📊 Progress: {answered_count}/{len(questions)} questions completed</h4>
+        <div style="background: #fff; border-radius: 10px; padding: 5px; margin-top: 10px;">
+            <div style="background: #4CAF50; height: 20px; border-radius: 10px; width: {progress*100}%;"></div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Display questions
+    for i, question in enumerate(questions):
+        question_key = question['id']
+        attempt_key = f"attempts_{question_key}"
+        answer_key = f"answer_{question_key}"
+        
+        # Initialize attempt counter
+        if attempt_key not in st.session_state:
+            st.session_state[attempt_key] = 0
+        
+        # Question container
+        with st.container():
+            st.markdown(f"""<div style="background: white; padding: 20px; border-radius: 15px; margin: 15px 0; border-left: 5px solid #8B4513;">""")
+            
+            # Question status and type indicator
+            question_type = question.get('type', 'multiple_choice')
+            type_emoji = {
+                'multiple_choice': '🔤',
+                'true_false': '✅❌', 
+                'fill_blank': '📝',
+                'ordering': '🔢'
+            }.get(question_type, '❓')
+            
+            if question_key in st.session_state.answered_ss_questions:
+                st.markdown(f"**Question {i+1}:** ✅ {type_emoji} **COMPLETED**")
+            elif st.session_state[attempt_key] > 0:
+                st.markdown(f"**Question {i+1}:** ❌ {type_emoji} **TRY AGAIN**")
+            else:
+                st.markdown(f"**Question {i+1}:** {type_emoji}")
+            
+            st.markdown(f"**{question['question']}**")
+            
+            # Only show interactive elements if not completed
+            if question_key not in st.session_state.answered_ss_questions:
+                # Initialize answer in session state
+                if answer_key not in st.session_state:
+                    st.session_state[answer_key] = None
+                
+                # Display question type-specific interface
+                if question_type == 'true_false':
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        if st.button("✅ TRUE", key=f"true_{question_key}", use_container_width=True):
+                            st.session_state[answer_key] = "True"
+                    with col2:
+                        if st.button("❌ FALSE", key=f"false_{question_key}", use_container_width=True):
+                            st.session_state[answer_key] = "False"
+                    
+                    if st.session_state.get(answer_key):
+                        st.success(f"You selected: **{st.session_state[answer_key]}**")
+                    
+                elif question_type == 'fill_blank':
+                    if "options" in question and question["options"]:
+                        answer = st.selectbox(
+                            "Choose the correct answer:",
+                            question["options"],
+                            key=f"select_{question_key}",
+                            index=0
+                        )
+                        st.session_state[answer_key] = answer
+                    else:
+                        answer = st.text_input(
+                            "Fill in the blank:",
+                            key=f"text_{question_key}",
+                            placeholder="Type your answer here..."
+                        )
+                        if answer:
+                            st.session_state[answer_key] = answer
+                
+                elif question_type == 'ordering':
+                    st.write("Select the correct order:")
+                    for j, option in enumerate(question["options"]):
+                        if st.button(f"📋 {option}", key=f"order_{question_key}_{j}", use_container_width=True):
+                            st.session_state[answer_key] = option
+                    
+                    if st.session_state.get(answer_key):
+                        st.success(f"You selected: **{st.session_state[answer_key]}**")
+                
+                else:  # multiple_choice
+                    for j, option in enumerate(question["options"]):
+                        option_letters = ['A', 'B', 'C', 'D']
+                        letter = option_letters[j] if j < len(option_letters) else str(j+1)
+                        
+                        if st.button(f"{letter}. {option}", key=f"choice_{question_key}_{j}", use_container_width=True):
+                            st.session_state[answer_key] = option
+                    
+                    if st.session_state.get(answer_key):
+                        st.success(f"You selected: **{st.session_state[answer_key]}**")
+                
+                # Check Answer button
+                st.markdown("<br>", unsafe_allow_html=True)
+                col1, col2, col3 = st.columns([1, 2, 1])
+                with col2:
+                    if st.button(f"🎯 Check My Answer!", key=f"check_{question_key}", use_container_width=True):
+                        selected_answer = st.session_state.get(answer_key)
+                        if selected_answer is None:
+                            st.error("⚠️ Please select an answer first!")
+                        else:
+                            st.session_state[attempt_key] += 1
+                            
+                            if selected_answer == question["correct"]:
+                                # Correct answer
+                                points = 10 if st.session_state[attempt_key] == 1 else 5
+                                
+                                celebration_messages = [
+                                    "🎉 Excellent! You know your history!",
+                                    "✨ Outstanding! You're a social studies star!", 
+                                    "🏆 Perfect! You understand the lesson!",
+                                    "🌟 Brilliant! You've mastered this topic!"
+                                ]
+                                import random
+                                celebration = random.choice(celebration_messages)
+                                
+                                st.success(f"{celebration} (+{points} points!)")
+                                st.info(f"📚 **Explanation:** {question['explanation']}")
+                                st.info(f"💡 **Why this matters:** {question['reasoning']}")
+                                
+                                st.session_state.answered_ss_questions.add(question_key)
+                                st.session_state.ss_score += points
+                                st.session_state.ss_questions_answered += 1
+                                
+                                # Update kid progress if authenticated
+                                if hasattr(st.session_state, 'selected_kid') and hasattr(st.session_state, 'profile_manager'):
+                                    st.session_state.profile_manager.update_subject_progress(
+                                        st.session_state.selected_kid['kid_id'],
+                                        'social_studies',
+                                        correct=True,
+                                        points=points
+                                    )
+                                
+                                st.balloons()
+                            else:
+                                # Wrong answer
+                                st.session_state[attempt_key] += 1
+                                
+                                if st.session_state[attempt_key] >= 2:
+                                    # Show correct answer after 2 attempts
+                                    encouraging_messages = [
+                                        "💪 Good effort! Learning takes practice!",
+                                        "🌟 Nice try! Now you know for next time!", 
+                                        "😊 Great attempt! Every mistake helps us learn!",
+                                        "🌈 Keep trying! You're getting smarter!"
+                                    ]
+                                    encouragement = random.choice(encouraging_messages)
+                                    
+                                    st.info(f"{encouragement}")
+                                    st.success(f"🎯 The correct answer is: **{question['correct']}**")
+                                    st.info(f"📚 **Explanation:** {question['explanation']}")
+                                    st.info(f"💡 **Remember:** {question['reasoning']}")
+                                    
+                                    st.session_state.answered_ss_questions.add(question_key)
+                                    st.session_state.ss_questions_answered += 1
+                                    
+                                    # Update progress (no points for wrong answer)
+                                    if hasattr(st.session_state, 'selected_kid') and hasattr(st.session_state, 'profile_manager'):
+                                        st.session_state.profile_manager.update_subject_progress(
+                                            st.session_state.selected_kid['kid_id'],
+                                            'social_studies', 
+                                            correct=False,
+                                            points=0
+                                        )
+                                else:
+                                    st.error("❌ Not quite right. Try again!")
+                                    st.info("💡 **Hint:** Think about what you learned in the textbook.")
+            else:
+                st.success("✅ **Question completed!**")
+            
+            st.markdown("</div>", unsafe_allow_html=True)
+            
+            if i < len(questions) - 1:
+                st.divider()
 
 def display_ela_test():
     """Display 20-question ELA test"""
